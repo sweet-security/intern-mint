@@ -57,6 +57,14 @@ impl ShardedSet {
             entry.remove();
         }
     }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.shards.iter().map(|o| o.lock().len()).sum()
+    }
 }
 
 impl Default for ShardedSet {
@@ -81,3 +89,11 @@ impl Default for ShardedSet {
 }
 
 pub(crate) static POOL: LazyLock<ShardedSet> = LazyLock::new(Default::default);
+
+pub fn is_empty() -> bool {
+    POOL.is_empty()
+}
+
+pub fn len() -> usize {
+    POOL.len()
+}

@@ -4,7 +4,7 @@ pub mod bstr;
 #[cfg(feature = "databuf")]
 pub mod databuf;
 pub mod interned;
-mod pool;
+pub mod pool;
 #[cfg(feature = "serde")]
 pub mod serde;
 #[cfg(test)]

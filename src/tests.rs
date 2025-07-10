@@ -1,14 +1,11 @@
 use parking_lot::Mutex;
 use triomphe::Arc;
 
-use crate::{interned::Interned, pool::POOL};
+use crate::{interned::Interned, pool};
 
 #[test]
 fn sanity() {
-    let verify_empty = || {
-        let len = POOL.shards.iter().map(|o| o.lock().len()).sum::<usize>();
-        assert_eq!(len, 0);
-    };
+    let verify_empty = || assert_eq!(pool::len(), 0);
     verify_empty();
 
     {
