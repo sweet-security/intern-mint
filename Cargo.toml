@@ -2,6 +2,11 @@
 name = "intern-mint"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
+keywords = ["bytes", "cache", "hash", "interning", "slice"]
+description = "byte slice interning"
+repository = "https://github.com/sweet-security/intern-mint"
+
 
 [dependencies]
 ahash = "0.8.12"
