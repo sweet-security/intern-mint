@@ -1,0 +1,15 @@
+{
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "rustfmt": {
+          "extraArgs": ["+nightly"]
+        },
+        "check": {
+          "command": "clippy"
+        }
+      }
+    }
+  },
+  "wrap_guides": [100]
+}

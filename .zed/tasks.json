@@ -1,0 +1,10 @@
+[
+  {
+    "label": "rust: cargo build",
+    "command": "cargo build"
+  },
+  {
+    "label": "rust: cargo sort",
+    "command": "cargo sort"
+  }
+]

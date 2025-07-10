@@ -1,0 +1,10 @@
+[package]
+name = "intern-mint"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ahash = "0.8.12"
+hashbrown = "0.15.4"
+parking_lot = "0.12.4"
+triomphe = "0.1.14"
