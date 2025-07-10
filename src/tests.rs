@@ -98,4 +98,11 @@ fn sanity() {
         assert_eq!(map.get(borrowed_unknown_key), None);
     }
     verify_empty();
+
+    {
+        let interned = Interned::new(b"hello!");
+        let interned_from_borrow = interned.as_ref().intern();
+        assert_eq!(interned.as_ptr(), interned_from_borrow.as_ptr());
+    }
+    verify_empty();
 }

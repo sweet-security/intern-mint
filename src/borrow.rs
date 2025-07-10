@@ -4,6 +4,8 @@ use std::{
     ops::Deref,
 };
 
+use crate::interned::Interned;
+
 #[derive(Eq)]
 #[repr(transparent)]
 pub struct BorrowedInterned([u8]);
@@ -11,6 +13,10 @@ pub struct BorrowedInterned([u8]);
 impl BorrowedInterned {
     pub(crate) fn new(value: &[u8]) -> &BorrowedInterned {
         unsafe { &*(value as *const [u8] as *const BorrowedInterned) }
+    }
+
+    pub fn intern(&self) -> Interned {
+        Interned::new(self.deref())
     }
 }
 
@@ -43,5 +49,13 @@ impl PartialOrd for BorrowedInterned {
 impl Ord for BorrowedInterned {
     fn cmp(&self, other: &Self) -> Ordering {
         self.deref().cmp(other.deref())
+    }
+}
+
+impl ToOwned for BorrowedInterned {
+    type Owned = Interned;
+
+    fn to_owned(&self) -> Self::Owned {
+        self.intern()
     }
 }
