@@ -12,6 +12,9 @@ parking_lot = "0.12.4"
 serde = { version = "1.0.219", optional = true }
 triomphe = "0.1.14"
 
+[dev-dependencies]
+serial_test = "3.2.0"
+
 [features]
 default = []
 bstr = ["dep:bstr"]

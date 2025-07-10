@@ -4,6 +4,10 @@
     "command": "cargo build"
   },
   {
+    "label": "rust: cargo test",
+    "command": "cargo test"
+  },
+  {
     "label": "rust: cargo sort",
     "command": "cargo sort"
   }

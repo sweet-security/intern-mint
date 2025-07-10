@@ -1,13 +1,16 @@
 use parking_lot::Mutex;
+use serial_test::serial;
 use triomphe::Arc;
 
 use crate::{interned::Interned, pool};
 
-#[test]
-fn sanity() {
-    let verify_empty = || assert_eq!(pool::len(), 0);
-    verify_empty();
+fn verify_empty() {
+    assert_eq!(pool::len(), 0);
+}
 
+#[test]
+#[serial]
+fn same_data_same_ptr() {
     {
         let a = Interned::new(b"hello");
         let b = Interned::new(b"hello");
@@ -15,7 +18,11 @@ fn sanity() {
         assert_eq!(a.as_ptr(), b.as_ptr());
     }
     verify_empty();
+}
 
+#[test]
+#[serial]
+fn different_data_different_ptr() {
     {
         let a = Interned::new(b"hello");
         let b = Interned::new(b"bye");
@@ -29,7 +36,11 @@ fn sanity() {
         assert_ne!(d.as_ptr(), e.as_ptr());
     }
     verify_empty();
+}
 
+#[test]
+#[serial]
+fn cloned_data_same_ptr() {
     {
         let a = Interned::new(b"hello");
         let b = a.clone();
@@ -43,7 +54,11 @@ fn sanity() {
         assert_eq!(d.as_ptr(), e.as_ptr());
     }
     verify_empty();
+}
 
+#[test]
+#[serial]
+fn same_data_multithreaded_same_ptr() {
     {
         const LEN: usize = 1024;
 
@@ -76,7 +91,11 @@ fn sanity() {
         }
     }
     verify_empty();
+}
 
+#[test]
+#[serial]
+fn map_usage_with_borrow() {
     {
         use std::collections::HashMap;
 
@@ -95,7 +114,11 @@ fn sanity() {
         assert_eq!(map.get(borrowed_unknown_key), None);
     }
     verify_empty();
+}
 
+#[test]
+#[serial]
+fn re_intern_borrow_same_ptr() {
     {
         let interned = Interned::new(b"hello!");
         let interned_from_borrow = interned.as_ref().intern();
