@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     cmp::Ordering,
     hash::{Hash, Hasher},
     ops::Deref,
@@ -135,6 +136,66 @@ impl Ord for Interned {
     }
 }
 
+impl From<&[u8]> for Interned {
+    fn from(value: &[u8]) -> Self {
+        Interned::new(value)
+    }
+}
+
+impl Borrow<BorrowedInterned> for Interned {
+    fn borrow(&self) -> &BorrowedInterned {
+        BorrowedInterned::new(self.deref())
+    }
+}
+
+impl AsRef<BorrowedInterned> for Interned {
+    fn as_ref(&self) -> &BorrowedInterned {
+        BorrowedInterned::new(self.deref())
+    }
+}
+
+#[derive(Eq)]
+#[repr(transparent)]
+pub struct BorrowedInterned([u8]);
+
+impl BorrowedInterned {
+    fn new(value: &[u8]) -> &BorrowedInterned {
+        unsafe { &*(value as *const [u8] as *const BorrowedInterned) }
+    }
+}
+
+impl Deref for BorrowedInterned {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl PartialEq for BorrowedInterned {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.as_ptr(), other.as_ptr())
+    }
+}
+
+impl Hash for BorrowedInterned {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ptr().hash(state);
+    }
+}
+
+impl PartialOrd for BorrowedInterned {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BorrowedInterned {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.deref().cmp(other.deref())
+    }
+}
+
 #[test]
 fn sanity() {
     let verify_empty = || {
@@ -209,6 +270,25 @@ fn sanity() {
                     .all(|o| std::ptr::eq(arcs[0].as_ptr(), o.as_ptr()))
             );
         }
+    }
+    verify_empty();
+
+    {
+        use std::collections::HashMap;
+
+        let map = HashMap::<Interned, u64>::from_iter([(b"key".as_ref().into(), 1)]);
+
+        let key = Interned::new(b"key");
+        assert_eq!(map.get(&key), Some(&1));
+
+        let borrowed_key = key.as_ref();
+        assert_eq!(map.get(borrowed_key), Some(&1));
+
+        let unknown_key = Interned::new(b"unknown_key");
+        assert_eq!(map.get(&unknown_key), None);
+
+        let borrowed_unknown_key = unknown_key.as_ref();
+        assert_eq!(map.get(borrowed_unknown_key), None);
     }
     verify_empty();
 }
