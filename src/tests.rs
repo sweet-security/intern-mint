@@ -74,7 +74,7 @@ fn sanity() {
             assert!(
                 arcs.iter()
                     .skip(1)
-                    .all(|o| std::ptr::eq(arcs[0].as_ptr(), o.as_ptr()))
+                    .all(|o| std::ptr::addr_eq(arcs[0].as_ptr(), o.as_ptr()))
             );
         }
     }

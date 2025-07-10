@@ -37,7 +37,7 @@ impl Deref for Interned {
 
 impl PartialEq for Interned {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.as_ptr(), other.as_ptr())
+        std::ptr::addr_eq(self.as_ptr(), other.as_ptr())
     }
 }
 
