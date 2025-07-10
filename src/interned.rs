@@ -1,8 +1,10 @@
 use std::{
     borrow::Borrow,
     cmp::Ordering,
+    ffi::{OsStr, OsString},
     hash::{Hash, Hasher},
     ops::Deref,
+    path::{Path, PathBuf},
 };
 
 use triomphe::Arc;
@@ -60,6 +62,47 @@ impl Ord for Interned {
 impl From<&[u8]> for Interned {
     fn from(value: &[u8]) -> Self {
         Interned::new(value)
+    }
+}
+impl From<Vec<u8>> for Interned {
+    fn from(value: Vec<u8>) -> Self {
+        value.as_slice().into()
+    }
+}
+
+impl From<&str> for Interned {
+    fn from(value: &str) -> Self {
+        value.as_bytes().into()
+    }
+}
+
+impl From<String> for Interned {
+    fn from(value: String) -> Self {
+        value.as_bytes().into()
+    }
+}
+
+impl From<&OsStr> for Interned {
+    fn from(value: &OsStr) -> Self {
+        value.as_encoded_bytes().into()
+    }
+}
+
+impl From<OsString> for Interned {
+    fn from(value: OsString) -> Self {
+        value.as_encoded_bytes().into()
+    }
+}
+
+impl From<&Path> for Interned {
+    fn from(value: &Path) -> Self {
+        value.as_os_str().into()
+    }
+}
+
+impl From<PathBuf> for Interned {
+    fn from(value: PathBuf) -> Self {
+        value.as_os_str().into()
     }
 }
 
