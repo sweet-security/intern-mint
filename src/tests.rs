@@ -7,7 +7,8 @@ use triomphe::Arc;
 use crate::{interned::Interned, pool};
 
 fn verify_empty() {
-    assert_eq!(pool::len(), 0);
+    // after default interned is used for the first time, it's kept forever in the pool
+    assert!(pool::len() <= 1);
 }
 
 #[test]

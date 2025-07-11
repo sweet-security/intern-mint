@@ -4,7 +4,7 @@ use std::{
     ops::Deref,
 };
 
-use crate::interned::Interned;
+use crate::interned::{self, Interned};
 
 #[derive(Eq)]
 #[repr(transparent)]
@@ -22,6 +22,12 @@ impl BorrowedInterned {
     pub fn hash_data<H: Hasher>(&self, state: &mut H) {
         self.deref().hash(state);
         0u8.hash(state);
+    }
+}
+
+impl Default for &BorrowedInterned {
+    fn default() -> Self {
+        interned::DEFAULT.deref().as_ref()
     }
 }
 

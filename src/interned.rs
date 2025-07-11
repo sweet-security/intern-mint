@@ -5,6 +5,7 @@ use std::{
     hash::{Hash, Hasher},
     ops::Deref,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use triomphe::Arc;
@@ -23,6 +24,14 @@ impl Interned {
     pub fn hash_data<H: Hasher>(&self, state: &mut H) {
         self.deref().hash(state);
         0u8.hash(state);
+    }
+}
+
+pub(crate) static DEFAULT: LazyLock<Interned> = LazyLock::new(|| Interned::new(Default::default()));
+
+impl Default for Interned {
+    fn default() -> Self {
+        DEFAULT.clone()
     }
 }
 
