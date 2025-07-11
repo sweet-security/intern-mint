@@ -8,7 +8,9 @@ use crate::{interned::Interned, pool};
 
 fn verify_empty() {
     // after default interned is used for the first time, it's kept forever in the pool
-    assert!(pool::len() <= 1);
+    // create a default instance in case it didn't exist before
+    let _a = Interned::default();
+    assert!(pool::len() == 1);
 }
 
 #[test]
