@@ -7,6 +7,12 @@ use triomphe::Arc;
 type LockedShard = HashTable<Arc<[u8]>>;
 type Shard = Mutex<LockedShard>;
 
+#[derive(Debug, Default, Clone, Copy)]
+pub struct MemoryUsage {
+    pub len: usize,
+    pub capacity: usize,
+}
+
 pub(crate) struct ShardedSet {
     pub(crate) shift: usize,
     pub(crate) hash_builder: ahash::RandomState,
@@ -23,15 +29,15 @@ impl ShardedSet {
         (hash, shard)
     }
 
+    fn hasher(&self, value: &Arc<[u8]>) -> u64 {
+        self.hash_builder.hash_one(value.deref())
+    }
+
     pub(crate) fn get_or_insert(&self, value: &[u8]) -> Arc<[u8]> {
         let (hash, mut shard) = self.get_hash_and_shard(value);
 
         shard
-            .entry(
-                hash,
-                |o| o.deref() == value,
-                |o| self.hash_builder.hash_one(o.deref()),
-            )
+            .entry(hash, |o| o.deref() == value, |o| self.hasher(o))
             .or_insert_with(|| Arc::from(value))
             .get()
             .clone()
@@ -48,11 +54,14 @@ impl ShardedSet {
 
         let (hash, mut shard) = self.get_hash_and_shard(value);
 
-        if let Entry::Occupied(entry) = shard.entry(
+        let entry = shard.entry(
             hash,
             |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()),
-            |o| self.hash_builder.hash_one(o.deref()),
-        ) && Arc::strong_count(entry.get()) <= MINIMUM_STRONG_COUNT
+            |o| self.hasher(o),
+        );
+
+        if let Entry::Occupied(entry) = entry
+            && Arc::strong_count(entry.get()) <= MINIMUM_STRONG_COUNT
         {
             entry.remove();
         }
@@ -64,6 +73,33 @@ impl ShardedSet {
 
     pub(crate) fn len(&self) -> usize {
         self.shards.iter().map(|o| o.lock().len()).sum()
+    }
+
+    pub(crate) fn capacity(&self) -> usize {
+        self.shards.iter().map(|o| o.lock().capacity()).sum()
+    }
+
+    pub(crate) fn get_memory_usage(&self) -> MemoryUsage {
+        self.shards
+            .iter()
+            .map(|o| {
+                let o = o.lock();
+                MemoryUsage {
+                    len: o.len(),
+                    capacity: o.capacity(),
+                }
+            })
+            .reduce(|acc, o| MemoryUsage {
+                len: acc.len + o.len,
+                capacity: acc.capacity + o.capacity,
+            })
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn shrink_to_fit(&self) {
+        for shard in self.shards.iter() {
+            shard.lock().shrink_to_fit(|o| self.hasher(o));
+        }
     }
 }
 
@@ -96,4 +132,16 @@ pub fn is_empty() -> bool {
 
 pub fn len() -> usize {
     POOL.len()
+}
+
+pub fn capacity() -> usize {
+    POOL.capacity()
+}
+
+pub fn get_memory_usage() -> MemoryUsage {
+    POOL.get_memory_usage()
+}
+
+pub fn shrink_to_fit() {
+    POOL.shrink_to_fit();
 }
