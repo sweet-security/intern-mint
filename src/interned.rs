@@ -19,6 +19,11 @@ impl Interned {
     pub fn new(value: &[u8]) -> Self {
         Self(POOL.get_or_insert(value))
     }
+
+    pub fn hash_data<H: Hasher>(&self, state: &mut H) {
+        self.deref().hash(state);
+        0u8.hash(state);
+    }
 }
 
 impl Drop for Interned {

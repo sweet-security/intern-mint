@@ -18,6 +18,11 @@ impl BorrowedInterned {
     pub fn intern(&self) -> Interned {
         Interned::new(self.deref())
     }
+
+    pub fn hash_data<H: Hasher>(&self, state: &mut H) {
+        self.deref().hash(state);
+        0u8.hash(state);
+    }
 }
 
 impl Deref for BorrowedInterned {

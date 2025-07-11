@@ -72,7 +72,7 @@ impl Debug for BorrowedInterned {
 
 impl From<&BStr> for Interned {
     fn from(value: &BStr) -> Self {
-        Interned::new(value.as_ref())
+        Self::new(value.as_ref())
     }
 }
 

@@ -1,3 +1,5 @@
+use std::hash::{BuildHasher, Hasher};
+
 use parking_lot::Mutex;
 use serial_test::serial;
 use triomphe::Arc;
@@ -125,4 +127,46 @@ fn re_intern_borrow_same_ptr() {
         assert_eq!(interned.as_ptr(), interned_from_borrow.as_ptr());
     }
     verify_empty();
+}
+
+#[test]
+#[serial]
+fn validate_data_hash() {
+    let hash_builder = ahash::RandomState::new();
+
+    let hash_data = |data: &Interned| {
+        let mut hasher = hash_builder.build_hasher();
+        data.hash_data(&mut hasher);
+        hasher.finish()
+    };
+
+    let (ptr_hash_1, data_hash_1) = {
+        let interned = Interned::new(b"hello!");
+        (hash_builder.hash_one(&interned), hash_data(&interned))
+    };
+    verify_empty();
+
+    let (ptr_hash_2, data_hash_2) = {
+        let _a = Interned::new(b"a");
+        let _a = Interned::new(b"bit");
+        let _a = Interned::new(b"more");
+        let _a = Interned::new(b"allocations");
+        let _a = Interned::new(b"so");
+        let _a = Interned::new(b"we");
+        let _a = Interned::new(b"won't");
+        let _a = Interned::new(b"use");
+        let _a = Interned::new(b"the");
+        let _a = Interned::new(b"same");
+        let _a = Interned::new(b"address");
+
+        let interned = Interned::new(b"hello!");
+        (hash_builder.hash_one(&interned), hash_data(&interned))
+    };
+    verify_empty();
+
+    assert_ne!(ptr_hash_1, data_hash_1);
+    assert_ne!(ptr_hash_1, ptr_hash_2);
+
+    assert_ne!(ptr_hash_2, data_hash_2);
+    assert_eq!(data_hash_1, data_hash_2);
 }
