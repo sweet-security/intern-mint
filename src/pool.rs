@@ -33,7 +33,7 @@ impl ShardedSet {
         self.hash_builder.hash_one(value.deref())
     }
 
-    pub(crate) fn get_existing(&self, value: &[u8]) -> Option<Arc<[u8]>> {
+    pub(crate) fn get_from_existing_ref(&self, value: &[u8]) -> Option<Arc<[u8]>> {
         let (hash, shard) = self.get_hash_and_shard(value);
         shard
             .find(hash, |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()))

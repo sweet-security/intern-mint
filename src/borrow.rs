@@ -20,8 +20,8 @@ impl BorrowedInterned {
 
     pub fn intern(&self) -> Interned {
         Interned::from_existing(
-            POOL.get_existing(self.deref())
-                .expect("borrowed values must exist in the pool"),
+            POOL.get_from_existing_ref(self.deref())
+                .expect("borrowed values must already exist in the pool"),
         )
     }
 
