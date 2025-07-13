@@ -54,13 +54,13 @@ impl Deref for Interned {
 
 impl PartialEq for Interned {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::addr_eq(self.as_ptr(), other.as_ptr())
+        self.deref().eq(other)
     }
 }
 
 impl Hash for Interned {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_ptr().hash(state);
+        self.deref().hash(state)
     }
 }
 
@@ -72,7 +72,7 @@ impl PartialOrd for Interned {
 
 impl Ord for Interned {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.deref().cmp(other.deref())
+        self.deref().cmp(other)
     }
 }
 
