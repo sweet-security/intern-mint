@@ -26,8 +26,7 @@ impl Interned {
     }
 
     pub fn hash_data<H: Hasher>(&self, state: &mut H) {
-        self.deref().hash(state);
-        0u8.hash(state);
+        self.deref().hash_data(state)
     }
 }
 
@@ -46,10 +45,10 @@ impl Drop for Interned {
 }
 
 impl Deref for Interned {
-    type Target = [u8];
+    type Target = BorrowedInterned;
 
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        BorrowedInterned::new(self.0.deref())
     }
 }
 
@@ -126,12 +125,12 @@ impl From<PathBuf> for Interned {
 
 impl Borrow<BorrowedInterned> for Interned {
     fn borrow(&self) -> &BorrowedInterned {
-        BorrowedInterned::new(self.deref())
+        self.deref()
     }
 }
 
 impl AsRef<BorrowedInterned> for Interned {
     fn as_ref(&self) -> &BorrowedInterned {
-        BorrowedInterned::new(self.deref())
+        self.deref()
     }
 }
