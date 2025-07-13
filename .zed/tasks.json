@@ -1,11 +1,11 @@
 [
   {
     "label": "rust: cargo build",
-    "command": "cargo build"
+    "command": "cargo build --all-features"
   },
   {
     "label": "rust: cargo test",
-    "command": "cargo test"
+    "command": "cargo test --all-features"
   },
   {
     "label": "rust: cargo sort",
