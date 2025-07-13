@@ -1,1 +1,4 @@
-words = ["bstr"]
+words = [
+    "bstr",
+    "databuf",
+]

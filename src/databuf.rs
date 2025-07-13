@@ -7,7 +7,7 @@ use crate::interned::Interned;
 impl Encode for Interned {
     #[inline]
     fn encode<const CONFIG: u16>(&self, w: &mut (impl Write + ?Sized)) -> std::io::Result<()> {
-        Encode::encode::<CONFIG>(&self, w)
+        Encode::encode::<CONFIG>(self as &[u8], w)
     }
 }
 
