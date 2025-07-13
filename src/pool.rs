@@ -33,6 +33,13 @@ impl ShardedSet {
         self.hash_builder.hash_one(value.deref())
     }
 
+    pub(crate) fn get_existing(&self, value: &[u8]) -> Option<Arc<[u8]>> {
+        let (hash, shard) = self.get_hash_and_shard(value);
+        shard
+            .find(hash, |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()))
+            .cloned()
+    }
+
     pub(crate) fn get_or_insert(&self, value: &[u8]) -> Arc<[u8]> {
         let (hash, mut shard) = self.get_hash_and_shard(value);
 

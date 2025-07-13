@@ -21,6 +21,10 @@ impl Interned {
         Self(POOL.get_or_insert(value))
     }
 
+    pub(crate) fn from_existing(value: Arc<[u8]>) -> Self {
+        Self(value)
+    }
+
     pub fn hash_data<H: Hasher>(&self, state: &mut H) {
         self.deref().hash(state);
         0u8.hash(state);

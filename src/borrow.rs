@@ -4,7 +4,10 @@ use std::{
     ops::Deref,
 };
 
-use crate::interned::{self, Interned};
+use crate::{
+    interned::{self, Interned},
+    pool::POOL,
+};
 
 #[derive(Eq)]
 #[repr(transparent)]
@@ -16,7 +19,10 @@ impl BorrowedInterned {
     }
 
     pub fn intern(&self) -> Interned {
-        Interned::new(self.deref())
+        Interned::from_existing(
+            POOL.get_existing(self.deref())
+                .expect("borrowed values must exist in the pool"),
+        )
     }
 
     pub fn hash_data<H: Hasher>(&self, state: &mut H) {
