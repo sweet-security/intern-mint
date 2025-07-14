@@ -24,10 +24,6 @@ impl Interned {
     pub(crate) fn from_existing(value: Arc<[u8]>) -> Self {
         Self(value)
     }
-
-    pub fn hash_data<H: Hasher>(&self, state: &mut H) {
-        self.deref().hash_data(state)
-    }
 }
 
 pub(crate) static DEFAULT: LazyLock<Interned> = LazyLock::new(|| Interned::new(Default::default()));
