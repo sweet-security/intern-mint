@@ -14,9 +14,22 @@ use crate::{borrow::BorrowedInterned, pool::POOL};
 
 #[derive(Clone, Eq)]
 #[repr(transparent)]
+/// The main type offered by this crate, responsible for interning slices
 pub struct Interned(Arc<[u8]>);
 
 impl Interned {
+    /// Constructs a new [Interned] for a given `value`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use intern_mint::Interned;
+    ///
+    /// let a = Interned::new(b"hello");
+    /// let b = Interned::new(b"hello");
+    ///
+    /// assert_eq!(a.as_ptr(), b.as_ptr());
+    /// ```
     pub fn new(value: &[u8]) -> Self {
         Self(POOL.get_or_insert(value))
     }

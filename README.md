@@ -25,7 +25,7 @@ When a slice is dropped, the total reference count is checked, and the slice is 
 
 `Interned` type is the main type offered by this crate, responsible for interning slices.
 
-There is also `&BorrowedInterned` to pass around instead of cloning `Interned` instance when not needed,
+There is also `&BorrowedInterned` to pass around instead of cloning `Interned` instances when not needed,
 and in order to avoid passing `&Interned` which will require double-dereference to access the data.
 
 ## Examples
@@ -33,7 +33,7 @@ and in order to avoid passing `&Interned` which will require double-dereference 
 Same data will be held in the same address
 
 ```rust
-use intern_mint::interned::Interned;
+use intern_mint::Interned;
 
 let a = Interned::new(b"hello");
 let b = Interned::new(b"hello");
@@ -47,7 +47,7 @@ Note that the pointer is being used for hashing and comparing (see `Hash` and `P
 as opposed to hashing and comparing the actual data - because the pointers are unique for the same data as long as it "lives" in memory
 
 ```rust
-use intern_mint::{borrow::BorrowedInterned, interned::Interned};
+use intern_mint::{BorrowedInterned, Interned};
 
 let map = std::collections::HashMap::<Interned, u64>::from_iter([(Interned::new(b"key"), 1)]);
 
@@ -61,7 +61,7 @@ assert_eq!(map.get(borrowed_key), Some(&1));
 `&BorrowedInterned` can be used with btree-maps
 
 ```rust
-use intern_mint::{borrow::BorrowedInterned, interned::Interned};
+use intern_mint::{BorrowedInterned, Interned};
 
 let map = std::collections::BTreeMap::<Interned, u64>::from_iter([(Interned::new(b"key"), 1)]);
 

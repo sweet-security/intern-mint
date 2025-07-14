@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use serial_test::serial;
 use triomphe::Arc;
 
-use crate::{borrow::BorrowedInterned, interned::Interned, pool};
+use crate::{BorrowedInterned, Interned, pool};
 
 fn verify_empty() {
     // after default interned is used for the first time, it's kept forever in the pool

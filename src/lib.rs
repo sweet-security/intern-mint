@@ -11,3 +11,5 @@ pub mod pool;
 pub mod serde;
 #[cfg(test)]
 mod tests;
+
+pub use crate::{borrow::BorrowedInterned, interned::Interned};
