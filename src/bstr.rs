@@ -30,7 +30,7 @@ impl BorrowedInterned {
 
 impl Display for Interned {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        Display::fmt(self.as_bstr(), f)
+        Display::fmt(self as &BorrowedInterned, f)
     }
 }
 
@@ -42,7 +42,7 @@ impl Display for BorrowedInterned {
 
 impl Debug for Interned {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        Debug::fmt(self.as_bstr(), f)
+        Debug::fmt(self as &BorrowedInterned, f)
     }
 }
 
