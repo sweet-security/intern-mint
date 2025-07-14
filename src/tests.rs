@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use serial_test::serial;
 use triomphe::Arc;
 
-use crate::{interned::Interned, pool};
+use crate::{borrow::BorrowedInterned, interned::Interned, pool};
 
 fn verify_empty() {
     // after default interned is used for the first time, it's kept forever in the pool
@@ -151,7 +151,7 @@ fn map_usage_with_borrow() {
         let key = Interned::new(b"key");
         assert_eq!(map.get(&key), Some(&1));
 
-        let borrowed_key = key.as_ref();
+        let borrowed_key: &BorrowedInterned = &key;
         assert_eq!(map.get(borrowed_key), Some(&1));
 
         let unknown_key = Interned::new(b"unknown_key");
