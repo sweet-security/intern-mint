@@ -78,6 +78,10 @@ impl BorrowedInterned {
     /// # Example
     ///
     /// ```
+    /// use std::hash::{BuildHasher, Hasher};
+    ///
+    /// use intern_mint::Interned;
+    ///
     /// let hash_builder = ahash::RandomState::new();
     ///
     /// let hash_data = |data: &Interned| {
