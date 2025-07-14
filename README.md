@@ -33,6 +33,8 @@ and in order to avoid passing `&Interned` which will require double-dereference 
 Same data will be held in the same address
 
 ```rust
+use intern_mint::interned::Interned;
+
 let a = Interned::new(b"hello");
 let b = Interned::new(b"hello");
 
@@ -45,8 +47,9 @@ Note that the pointer is being used for hashing and comparing (see `Hash` and `P
 as opposed to hashing and comparing the actual data - because the pointers are unique for the same data as long as it "lives" in memory
 
 ```rust
+use intern_mint::{borrow::BorrowedInterned, interned::Interned};
 
-let map = HashMap::<Interned, u64>::from_iter([(Interned::new(b"key"), 1)]);
+let map = std::collections::HashMap::<Interned, u64>::from_iter([(Interned::new(b"key"), 1)]);
 
 let key = Interned::new(b"key");
 assert_eq!(map.get(&key), Some(&1));
@@ -58,8 +61,9 @@ assert_eq!(map.get(borrowed_key), Some(&1));
 `&BorrowedInterned` can be used with btree-maps
 
 ```rust
+use intern_mint::{borrow::BorrowedInterned, interned::Interned};
 
-let map = BTreeMap::<Interned, u64>::from_iter([(Interned::new(b"key"), 1)]);
+let map = std::collections::BTreeMap::<Interned, u64>::from_iter([(Interned::new(b"key"), 1)]);
 
 let key = Interned::new(b"key");
 assert_eq!(map.get(&key), Some(&1));
