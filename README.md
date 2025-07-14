@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="intern-mint" width="350">
+  <img src="https://github.com/sweet-security/intern-mint/blob/5eab157452131b7bda044a95f349e660b3a44335/logo.png?raw=true" alt="intern-mint" width="350">
 </p>
 
 ## TL;DR
