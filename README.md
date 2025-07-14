@@ -41,9 +41,12 @@ assert_eq!(a.as_ptr(), b.as_ptr());
 
 `&BorrowedInterned` can be used with hash-maps
 
+Note that the pointer is being used for hashing and comparing (see `Hash` and `PartialEq` trait implementations)\
+as opposed to hashing and comparing the actual data - because the pointers are unique for the same data as long as it "lives" in memory
+
 ```rust
 
-let map = HashMap::<Interned, u64>::from_iter([(b"key".as_ref().into(), 1)]);
+let map = HashMap::<Interned, u64>::from_iter([(Interned::new(b"key"), 1)]);
 
 let key = Interned::new(b"key");
 assert_eq!(map.get(&key), Some(&1));
@@ -56,7 +59,7 @@ assert_eq!(map.get(borrowed_key), Some(&1));
 
 ```rust
 
-let map = BTreeMap::<Interned, u64>::from_iter([(b"key".as_ref().into(), 1)]);
+let map = BTreeMap::<Interned, u64>::from_iter([(Interned::new(b"key"), 1)]);
 
 let key = Interned::new(b"key");
 assert_eq!(map.get(&key), Some(&1));
