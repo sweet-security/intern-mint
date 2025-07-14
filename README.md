@@ -2,6 +2,8 @@
   <img src="https://github.com/sweet-security/intern-mint/blob/5eab157452131b7bda044a95f349e660b3a44335/logo.png?raw=true" alt="intern-mint" width="350">
 </p>
 
+[![version](https://img.shields.io/crates/v/intern-mint)](https://crates.io/crates/intern-mint) [![documentation](https://docs.rs/intern-mint/badge.svg)](https://docs.rs/intern-mint) [![downloads](https://img.shields.io/crates/d/intern-mint)](https://crates.io/crates/intern-mint)
+
 ## TL;DR
 
 intern-mint is an implementation of byte slice interning.
@@ -14,7 +16,7 @@ This can potentially save memory and avoid allocations in environments where dat
 
 ## Technical details
 
-Slices are kept as `Arc<[u8]>`s using the [triomphe](https://github.com/Manishearth/triomphe) crate for smaller footprint.
+Slices are kept as `Arc<[u8]>`s using the [triomphe](https://github.com/Manishearth/triomphe) crate for a smaller footprint.
 
 The `Arc`s are then stored in a global static pool implemented as a dumbed-down version of [DashMap](https://github.com/xacrimon/dashmap).
 The pool consists of `N` shards (dependent on [available_parallelism](https://doc.rust-lang.org/beta/std/thread/fn.available_parallelism.html)) of [hashbrown](https://github.com/rust-lang/hashbrown) hash-tables, sharded by the slices' hashes, to avoid locking the entire table for each lookup.
