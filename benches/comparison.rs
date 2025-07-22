@@ -4,6 +4,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 
 include!("./random_strings_pool.rs");
 
+#[inline]
 fn use_generic<T: Eq + Hash + Clone>(intern: fn(&str) -> T) -> u32 {
     let mut map = HashMap::<T, u32>::with_capacity(POOL.len());
 
