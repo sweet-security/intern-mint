@@ -1,12 +1,17 @@
-use std::{collections::HashMap, hash::Hash, sync::LazyLock};
+use std::{borrow::Borrow, collections::HashMap, hash::Hash, sync::LazyLock};
 
 use criterion::{Criterion, criterion_group, criterion_main};
+use intern_mint::BorrowedInterned;
 
 include!("./random_strings_pool.rs");
 
 #[inline]
-fn use_generic<T: Eq + Hash + Clone>(intern: fn(&str) -> T) -> u32 {
-    let mut map = HashMap::<T, u32>::with_capacity(POOL.len());
+fn use_generic<K, Q>(intern: fn(&str) -> K) -> u32
+where
+    K: Eq + Hash + Clone + Borrow<Q>,
+    Q: Eq + Hash + ?Sized,
+{
+    let mut map = HashMap::<K, u32>::with_capacity(POOL.len());
 
     for i in 0..2 {
         for &s in POOL {
@@ -20,7 +25,8 @@ fn use_generic<T: Eq + Hash + Clone>(intern: fn(&str) -> T) -> u32 {
 
     for key in map.keys() {
         let key = key.clone();
-        sum += map.get(&key).copied().unwrap_or_default();
+        let borrowed = Borrow::<Q>::borrow(&key);
+        sum += map.get(borrowed).copied().unwrap_or_default();
     }
 
     sum
@@ -28,18 +34,18 @@ fn use_generic<T: Eq + Hash + Clone>(intern: fn(&str) -> T) -> u32 {
 
 fn use_intern_mint() -> u32 {
     use intern_mint::Interned;
-    use_generic(|o| Interned::from(o))
+    use_generic::<Interned, BorrowedInterned>(|o| Interned::from(o))
 }
 
 fn use_internment() -> u32 {
     use internment::ArcIntern;
-    use_generic(|o| ArcIntern::<String>::from_ref(o))
+    use_generic::<ArcIntern<String>, ArcIntern<String>>(|o| ArcIntern::from_ref(o))
 }
 
 fn use_intern_arc() -> u32 {
-    use intern_arc::HashInterner;
+    use intern_arc::{HashInterner, InternedHash};
     static INTERN_ARC_POOL: LazyLock<HashInterner<str>> = LazyLock::new(Default::default);
-    use_generic(|o| INTERN_ARC_POOL.intern_ref(o))
+    use_generic::<InternedHash<str>, InternedHash<str>>(|o| INTERN_ARC_POOL.intern_ref(o))
 }
 
 fn use_multithreaded(to_test: fn() -> u32) {
@@ -50,7 +56,7 @@ fn benchmark(c: &mut Criterion) {
     rayon::ThreadPoolBuilder::new()
         .num_threads(
             std::thread::available_parallelism()
-                .map(|o| o.get().div_ceil(2))
+                .map(|o| o.get())
                 .unwrap_or(1),
         )
         .build_global()
