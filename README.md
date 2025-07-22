@@ -87,6 +87,8 @@ The following features are available:
 In the [comparison](./benches/comparison.rs) benchmark `intern-mint` is compared to the crates [internment](https://crates.io/crates/internment) and [intern-arc](https://crates.io/crates/intern-arc).\
 The benchmark runs multi-threaded (one thread per available core) and uses per-thread standard's hash-maps to insert, modify, and get values using interned keys.
 
-On my machine (base model M4 MacBook Air), `intern-mint` performed 1.22x faster than `internment`, and 4.19x faster than `intern-arc`.
+On my personal machine (base model M4 MacBook Air), `intern-mint` performed 1.22x faster than `internment`, and 4.19x faster than `intern-arc`.\
+On my work machine (12th Gen Intel i7-1260P), `intern-mint` performed 1.77x faster than `internment`, and 52.36x faster than `intern-arc`.\
+I suspect the difference between my personal and work machine is so dramatic because it has double the cores, and `intern-arc` has a single mutex for the entire interned pool.
 
 `cargo bench` can be used to run the benchmark locally.
