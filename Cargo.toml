@@ -7,6 +7,10 @@ keywords = ["bytes", "cache", "hash", "interning", "slice"]
 description = "byte slice interning"
 repository = "https://github.com/sweet-security/intern-mint"
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
+
 [dependencies]
 ahash = "0.8.12"
 bstr = { version = "1.12.0", optional = true }
