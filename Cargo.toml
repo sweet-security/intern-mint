@@ -30,7 +30,7 @@ name = "comparison"
 harness = false
 
 [features]
-default = ["bstr"]
+default = []
 bstr = ["dep:bstr"]
 databuf = ["dep:databuf"]
 serde = ["bstr", "bstr/serde", "dep:serde"]
