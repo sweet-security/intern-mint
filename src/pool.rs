@@ -20,7 +20,7 @@ pub(crate) struct ShardedSet {
 }
 
 impl ShardedSet {
-    fn get_hash_and_shard(&self, value: &[u8]) -> (u64, MutexGuard<LockedShard>) {
+    fn get_hash_and_shard(&self, value: &[u8]) -> (u64, MutexGuard<'_, LockedShard>) {
         // hash before locking
         let hash = self.hash_builder.hash_one(value);
         // copied from https://github.com/xacrimon/dashmap/blob/366ce7e7872866a06de66eb95002fa6cf2c117a7/src/lib.rs#L419
