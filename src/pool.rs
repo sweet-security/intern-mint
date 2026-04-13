@@ -1,6 +1,6 @@
 use std::{ops::Deref, sync::LazyLock};
 
-use hashbrown::{HashTable, hash_table::Entry};
+use hashbrown::HashTable;
 use parking_lot::{Mutex, MutexGuard};
 use triomphe::Arc;
 
@@ -53,6 +53,7 @@ impl ShardedSet {
     /// Only try to remove values from the pool when the reference count is two
     /// one for the given [value] and another for the reference in the pool
     pub(crate) fn remove_if_needed(&self, value: &Arc<[u8]>) {
+        // one count for `value` and one for the entry in our pool
         const MINIMUM_STRONG_COUNT: usize = 2;
 
         if Arc::strong_count(value) > MINIMUM_STRONG_COUNT {
@@ -61,17 +62,17 @@ impl ShardedSet {
 
         let (hash, mut shard) = self.get_hash_and_shard(value);
 
-        let entry = shard.entry(
-            hash,
-            |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()),
-            |o| self.hasher(o),
-        );
+        let Ok(entry) = shard.find_entry(hash, |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()))
+        else {
+            return;
+        };
 
-        if let Entry::Occupied(entry) = entry
-            && Arc::strong_count(entry.get()) <= MINIMUM_STRONG_COUNT
-        {
-            entry.remove();
+        // check again in case the value has been cloned
+        if Arc::strong_count(entry.get()) > MINIMUM_STRONG_COUNT {
+            return;
         }
+
+        entry.remove();
     }
 
     pub(crate) fn is_empty(&self) -> bool {
