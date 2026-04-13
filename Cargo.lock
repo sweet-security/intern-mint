@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "intern-mint"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "ahash",
  "bstr",
