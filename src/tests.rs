@@ -241,18 +241,6 @@ fn validate_data_hash() {
 
 #[test]
 #[serial]
-#[cfg(feature = "databuf")]
-fn databuf_encode_decode() {
-    use databuf::{Decode, Encode, config::num::LE};
-
-    let a = Interned::new(b"hello");
-    let encoded = a.to_bytes::<LE>();
-    let b = Interned::from_bytes::<LE>(&encoded).unwrap();
-    assert_eq!(a.as_ptr(), b.as_ptr());
-}
-
-#[test]
-#[serial]
 #[cfg(feature = "serde")]
 fn serde() {
     let a = Interned::new(b"hello");

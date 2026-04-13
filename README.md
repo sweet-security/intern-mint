@@ -80,7 +80,6 @@ The following features are available:
 
 - `bstr` to add some type conversions, and the `Debug` and `Display` traits by using the [bstr](https://github.com/BurntSushi/bstr) crate - disabled by default
 - `serde` to add the `Serialize` and `Deserialize` traits provided by the [serde](https://github.com/serde-rs/serde) crate - disabled by default
-- `databuf` to add the `Encode` and `Decode` traits provided by the [databuf](https://github.com/nurmohammed840/databuf.rs) crate - disabled by default
 
 ## Benchmarks
 
