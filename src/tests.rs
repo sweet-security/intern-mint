@@ -292,7 +292,7 @@ fn concurrent_drop_does_not_leak() {
             .collect::<Vec<_>>();
 
         for thread in threads {
-            _ = thread.join();
+            thread.join().unwrap();
         }
 
         // after every handle is dropped, this iteration's entry must be gone; anything above the

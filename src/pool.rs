@@ -84,11 +84,15 @@ impl ShardedSet {
         // Under the shard lock the count is authoritative. If only this handle and the pool hold a
         // reference, this is the last external handle, so evict the pool's entry (drops the pool's
         // `Arc`, 2 -> 1). Otherwise other handles remain and we leave the entry in place.
-        if Arc::strong_count(&value) == MINIMUM_STRONG_COUNT
-            && let Ok(entry) =
+        // The two-level `if` is intentional: collapsing it into a let-chain (`&&let`) requires
+        // Rust 1.88 (unstable until then), which we do not want to mandate here.
+        #[allow(clippy::collapsible_if)]
+        if Arc::strong_count(&value) == MINIMUM_STRONG_COUNT {
+            if let Ok(entry) =
                 shard.find_entry(hash, |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()))
-        {
-            entry.remove();
+            {
+                entry.remove();
+            }
         }
 
         // Perform this handle's decrement while STILL holding the shard guard, so the final
