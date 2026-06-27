@@ -82,7 +82,7 @@ impl BorrowedInterned {
     ///
     /// use intern_mint::Interned;
     ///
-    /// let hash_builder = ahash::RandomState::new();
+    /// let hash_builder = foldhash::fast::RandomState::default();
     ///
     /// let hash_data = |data: &Interned| {
     ///     let mut hasher = hash_builder.build_hasher();
