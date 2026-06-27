@@ -3,6 +3,7 @@ use std::{
     cmp::Ordering,
     ffi::{OsStr, OsString},
     hash::{Hash, Hasher},
+    mem::ManuallyDrop,
     ops::Deref,
     path::{Path, PathBuf},
     sync::LazyLock,
@@ -13,9 +14,16 @@ use triomphe::Arc;
 use crate::{borrow::BorrowedInterned, pool::POOL};
 
 #[derive(Clone, Eq)]
-#[repr(transparent)]
 /// The main type offered by this crate, responsible for interning slices
-pub struct Interned(Arc<[u8]>);
+///
+/// The inner [Arc] is wrapped in [ManuallyDrop] so that, on drop, ownership of the [Arc] can be
+/// handed to the pool ([`POOL::remove_on_last_drop`]). This lets the pool perform the final
+/// reference-count decrement *while holding the shard lock*, which serializes it against the clones
+/// done in `get_or_insert` / `get_from_existing_ref` and makes the last-drop eviction race-free.
+/// [ManuallyDrop] is `repr(transparent)` over its inner `T`, so the in-memory layout is identical
+/// to a bare `Arc<[u8]>` (nothing relies on [Interned]'s own `repr` beyond that; only
+/// [`BorrowedInterned`]'s transparency is load-bearing).
+pub struct Interned(ManuallyDrop<Arc<[u8]>>);
 
 impl Interned {
     /// Constructs a new [Interned] for a given `value`
@@ -31,11 +39,11 @@ impl Interned {
     /// assert_eq!(a.as_ptr(), b.as_ptr());
     /// ```
     pub fn new(value: &[u8]) -> Self {
-        Self(POOL.get_or_insert(value))
+        Self::from_existing(POOL.get_or_insert(value))
     }
 
     pub(crate) fn from_existing(value: Arc<[u8]>) -> Self {
-        Self(value)
+        Self(ManuallyDrop::new(value))
     }
 }
 
@@ -49,7 +57,12 @@ impl Default for Interned {
 
 impl Drop for Interned {
     fn drop(&mut self) {
-        POOL.remove_if_needed(&self.0);
+        // SAFETY: `self.0` is a live `ManuallyDrop` that is never taken anywhere else, and `self`
+        // is being dropped, so this runs exactly once per handle and `self.0` is not used again
+        // afterwards. Taking the `Arc` out hands ownership to the pool, which performs the final
+        // reference-count decrement under the shard lock (see `remove_on_last_drop`).
+        let arc = unsafe { ManuallyDrop::take(&mut self.0) };
+        POOL.remove_on_last_drop(arc);
     }
 }
 
@@ -57,7 +70,8 @@ impl Deref for Interned {
     type Target = BorrowedInterned;
 
     fn deref(&self) -> &Self::Target {
-        BorrowedInterned::new(self.0.deref())
+        // `self.0` is `ManuallyDrop<Arc<[u8]>>`; deref through both layers to reach the `[u8]`
+        BorrowedInterned::new(&self.0)
     }
 }
 

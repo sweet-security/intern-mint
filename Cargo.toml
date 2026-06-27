@@ -32,6 +32,10 @@ serial_test = "3.4.0"
 name = "comparison"
 harness = false
 
+[[bench]]
+name = "drop_path"
+harness = false
+
 [features]
 default = []
 bstr = ["dep:bstr"]
