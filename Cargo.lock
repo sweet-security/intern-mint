@@ -435,6 +435,7 @@ dependencies = [
  "ahash",
  "bstr",
  "criterion",
+ "crossbeam-utils",
  "hashbrown 0.17.0",
  "intern-arc",
  "internment",
