@@ -65,9 +65,14 @@ impl ShardedSet {
     /// to the same data could both observe `count > 2` and bail, then both decrement, permanently
     /// orphaning the entry. Doing the decrement under the lock closes that window.
     ///
-    /// Note: with the unlocked fast path gone, every drop now hashes the full slice to locate its
-    /// shard and takes the shard lock. See the "rehash on drop" discussion in the PR for why hash
-    /// caching was not adopted.
+    /// Trade-off (rehash on drop): with the unlocked fast path gone, every drop now hashes the full
+    /// slice to locate its shard and then takes the shard lock. For large slices this dominates the
+    /// drop cost (benchmarked at ~250ns/drop for a 4 KiB slice vs ~14ns for 8 bytes). Caching the
+    /// hash inside [Interned] removes it (a 4 KiB drop drops to ~19ns) but costs +8 bytes on *every*
+    /// handle and widens the type out of `repr(transparent)`; for an interning crate whose value is
+    /// memory deduplication, that per-handle cost was judged not worth it here, and threading the
+    /// hash through cleanly belongs with the `get_or_insert` work in a later PR. Caching was
+    /// therefore left out; revisit it there if drop-heavy large-slice workloads matter.
     ///
     /// [Interned]: crate::Interned
     pub(crate) fn remove_on_last_drop(&self, value: Arc<[u8]>) {
