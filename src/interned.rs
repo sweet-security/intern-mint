@@ -8,14 +8,18 @@ use std::{
     sync::LazyLock,
 };
 
-use triomphe::Arc;
-
-use crate::{borrow::BorrowedInterned, pool::POOL};
+use crate::{
+    borrow::BorrowedInterned,
+    pool::{InternedArc, POOL},
+};
 
 #[derive(Clone, Eq)]
 #[repr(transparent)]
 /// The main type offered by this crate, responsible for interning slices
-pub struct Interned(Arc<[u8]>);
+///
+/// Backed by a [`triomphe::ThinArc<u64, u8>`] whose header caches the bytes' hash; this is still
+/// a single-word (thin) pointer, so `#[repr(transparent)]` continues to hold.
+pub struct Interned(InternedArc);
 
 impl Interned {
     /// Constructs a new [Interned] for a given `value`
@@ -34,7 +38,7 @@ impl Interned {
         Self(POOL.get_or_insert(value))
     }
 
-    pub(crate) fn from_existing(value: Arc<[u8]>) -> Self {
+    pub(crate) fn from_existing(value: InternedArc) -> Self {
         Self(value)
     }
 }
@@ -57,7 +61,11 @@ impl Deref for Interned {
     type Target = BorrowedInterned;
 
     fn deref(&self) -> &Self::Target {
-        BorrowedInterned::new(self.0.deref())
+        // Deref to the byte payload (`&self.0.slice`), NOT the `ThinArc` allocation base.
+        // `BorrowedInterned` derefs to `[u8]`, so the inherited `<[u8]>::as_ptr()` returns the
+        // data pointer; equal data shares one allocation, so equal data yields an equal slice
+        // pointer and the public `as_ptr()` equality/stability contract is preserved.
+        BorrowedInterned::new(&self.0.slice)
     }
 }
 

@@ -36,3 +36,7 @@ harness = false
 default = []
 bstr = ["dep:bstr"]
 serde = ["bstr", "bstr/serde", "dep:serde"]
+
+[[bench]]
+name = "churn"
+harness = false

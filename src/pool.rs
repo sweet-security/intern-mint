@@ -1,10 +1,19 @@
-use std::{ops::Deref, sync::LazyLock};
+use std::sync::LazyLock;
 
 use hashbrown::HashTable;
 use parking_lot::{Mutex, MutexGuard};
-use triomphe::Arc;
+use triomphe::ThinArc;
 
-type LockedShard = HashTable<Arc<[u8]>>;
+/// Each interned value is stored as a [`ThinArc`] whose allocation header caches the
+/// `ahash` of the bytes (the `u64` header) alongside the bytes themselves (the `u8` slice).
+///
+/// Caching the hash in the header lets [`ShardedSet::remove_if_needed`] and the table-growth
+/// rehash closure read the precomputed hash instead of re-hashing up to ~190 bytes, and shrinks
+/// every table slot from a 16-byte fat `Arc<[u8]>` to an 8-byte thin pointer (denser table,
+/// better cache behaviour).
+pub(crate) type InternedArc = ThinArc<u64, u8>;
+
+type LockedShard = HashTable<InternedArc>;
 type Shard = Mutex<LockedShard>;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -23,52 +32,74 @@ impl ShardedSet {
     fn get_hash_and_shard(&self, value: &[u8]) -> (u64, MutexGuard<'_, LockedShard>) {
         // hash before locking
         let hash = self.hash_builder.hash_one(value);
+        (hash, self.get_shard_for_hash(hash))
+    }
+
+    /// Locks and returns the shard that a value with the given `hash` belongs to.
+    ///
+    /// This lets the drop path locate a shard from the hash cached in the [`ThinArc`] header
+    /// without re-hashing the bytes.
+    fn get_shard_for_hash(&self, hash: u64) -> MutexGuard<'_, LockedShard> {
         // copied from https://github.com/xacrimon/dashmap/blob/366ce7e7872866a06de66eb95002fa6cf2c117a7/src/lib.rs#L419
         let idx = ((hash << 7) >> self.shift) as usize;
-        let shard = self.shards[idx].lock();
-        (hash, shard)
+        self.shards[idx].lock()
     }
 
-    fn hasher(&self, value: &Arc<[u8]>) -> u64 {
-        self.hash_builder.hash_one(value.deref())
+    /// Returns the hash stored in the [`ThinArc`] header instead of re-hashing the bytes.
+    ///
+    /// Used as the rehash closure on table growth/shrink so the slice bytes are never re-hashed.
+    fn hasher(&self, value: &InternedArc) -> u64 {
+        value.header.header
     }
 
-    pub(crate) fn get_from_existing_ref(&self, value: &[u8]) -> Option<Arc<[u8]>> {
+    pub(crate) fn get_from_existing_ref(&self, value: &[u8]) -> Option<InternedArc> {
         let (hash, shard) = self.get_hash_and_shard(value);
         shard
-            .find(hash, |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()))
+            .find(hash, |o| {
+                std::ptr::addr_eq(o.slice.as_ptr(), value.as_ptr())
+            })
             .cloned()
     }
 
-    pub(crate) fn get_or_insert(&self, value: &[u8]) -> Arc<[u8]> {
+    pub(crate) fn get_or_insert(&self, value: &[u8]) -> InternedArc {
         let (hash, mut shard) = self.get_hash_and_shard(value);
 
         shard
-            .entry(hash, |o| o.deref() == value, |o| self.hasher(o))
-            .or_insert_with(|| Arc::from(value))
+            .entry(hash, |o| o.slice.eq(value), |o| self.hasher(o))
+            // reuse the hash we already computed for the query bytes
+            .or_insert_with(|| ThinArc::from_header_and_slice(hash, value))
             .get()
             .clone()
     }
 
     /// Only try to remove values from the pool when the reference count is two
     /// one for the given [value] and another for the reference in the pool
-    pub(crate) fn remove_if_needed(&self, value: &Arc<[u8]>) {
+    pub(crate) fn remove_if_needed(&self, value: &InternedArc) {
         // one count for `value` and one for the entry in our pool
         const MINIMUM_STRONG_COUNT: usize = 2;
 
-        if Arc::strong_count(value) > MINIMUM_STRONG_COUNT {
+        // lock-free fast path: if there are other live owners we can't be the last,
+        // so there is nothing to remove (and no need to take the shard lock or re-hash).
+        if ThinArc::strong_count(value) > MINIMUM_STRONG_COUNT {
             return;
         }
 
-        let (hash, mut shard) = self.get_hash_and_shard(value);
+        // Read the shard index from the hash cached in the header instead of re-hashing
+        // the (up to ~190 byte) slice. The stored hash is exactly the one that was used to
+        // place this entry, so it locates the same shard and bucket.
+        let hash = value.header.header;
+        let mut shard = self.get_shard_for_hash(hash);
 
-        let Ok(entry) = shard.find_entry(hash, |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()))
-        else {
+        // Find the entry by pointer identity on the byte payload (data pointer), matching the
+        // public pointer-identity contract used elsewhere.
+        let Ok(entry) = shard.find_entry(hash, |o| {
+            std::ptr::addr_eq(o.slice.as_ptr(), value.slice.as_ptr())
+        }) else {
             return;
         };
 
-        // check again in case the value has been cloned
-        if Arc::strong_count(entry.get()) > MINIMUM_STRONG_COUNT {
+        // check again under the lock in case the value has been cloned in the meantime
+        if ThinArc::strong_count(entry.get()) > MINIMUM_STRONG_COUNT {
             return;
         }
 
