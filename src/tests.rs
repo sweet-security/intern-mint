@@ -239,6 +239,79 @@ fn validate_data_hash() {
     assert_eq!(data_hash_1, data_hash_2);
 }
 
+/// Regression test for the drop-path leak race (coverage finding #10).
+///
+/// Several threads each intern the *same* unique-per-iteration data and then drop their handle in
+/// unison right after a [Barrier], so the drops race. With the buggy `remove_if_needed` (a TOCTOU
+/// on an unlocked `strong_count`), two droppers can both observe `count > 2` and bail, leaving the
+/// entry orphaned in the pool forever. Because every iteration uses fresh bytes, an orphan
+/// ACCUMULATES instead of self-healing on re-intern, so the leak is observable as `pool::len()`
+/// drifting above the baseline.
+///
+/// The window between the unlocked count read and the field-drop decrement is tiny, so racing only
+/// two threads exposes the bug unreliably (scheduler-dependent). We instead race a small batch of
+/// threads per iteration: with several handles dropping at once, at least two reliably overlap the
+/// window, which makes the pre-fix failure deterministic in both debug and release builds while
+/// still exercising exactly the concurrent-last-drop path the fix protects.
+#[test]
+#[serial]
+fn concurrent_drop_does_not_leak() {
+    use std::sync::Barrier;
+
+    // each iteration interns unique data so any orphan accumulates instead of self-healing
+    const ITERATIONS: usize = 5_000;
+    // racing more than two droppers per iteration widens the effective race window enough to expose
+    // the bug deterministically (see doc comment above)
+    const RACERS: usize = 8;
+
+    // baseline: only the lazily-created DEFAULT interned value should remain in the pool
+    let _default = Interned::default();
+    let baseline = pool::len();
+    assert_eq!(baseline, 1, "expected only DEFAULT in the pool at baseline");
+
+    let mut orphans = 0usize;
+
+    for i in 0..ITERATIONS {
+        // unique data per iteration so a leaked entry can never be reclaimed by a later intern
+        let data = (i as u64).to_ne_bytes();
+
+        let barrier = Arc::new(Barrier::new(RACERS));
+
+        let threads = (0..RACERS)
+            .map(|_| {
+                std::thread::spawn({
+                    let barrier = barrier.clone();
+                    move || {
+                        let interned = Interned::new(&data);
+                        // line up all racers so their drops fire together
+                        barrier.wait();
+                        drop(interned);
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for thread in threads {
+            _ = thread.join();
+        }
+
+        // after every handle is dropped, this iteration's entry must be gone; anything above the
+        // baseline is a leaked/orphaned entry
+        let leaked = pool::len().saturating_sub(baseline);
+        orphans += leaked;
+    }
+
+    assert_eq!(
+        orphans, 0,
+        "drop-path race leaked {orphans} orphaned pool entries over {ITERATIONS} iterations",
+    );
+    assert_eq!(
+        pool::len(),
+        baseline,
+        "pool did not return to baseline after concurrent drops",
+    );
+}
+
 #[test]
 #[serial]
 #[cfg(feature = "serde")]
