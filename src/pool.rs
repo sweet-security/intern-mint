@@ -1,11 +1,15 @@
 use std::{ops::Deref, sync::LazyLock};
 
+use crossbeam_utils::CachePadded;
 use hashbrown::HashTable;
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::RwLock;
 use triomphe::Arc;
 
 type LockedShard = HashTable<Arc<[u8]>>;
-type Shard = Mutex<LockedShard>;
+// Cache-padded so adjacent shard locks don't share a cache line (avoids false
+// sharing under contention). `CachePadded` derefs to the `RwLock`, so
+// `self.shards[idx].read()` / `.write()` work directly.
+type Shard = CachePadded<RwLock<LockedShard>>;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct MemoryUsage {
@@ -20,13 +24,13 @@ pub(crate) struct ShardedSet {
 }
 
 impl ShardedSet {
-    fn get_hash_and_shard(&self, value: &[u8]) -> (u64, MutexGuard<'_, LockedShard>) {
-        // hash before locking
+    /// Compute the hash of `value` and the index of the shard it belongs to.
+    /// The caller decides whether to take a read or write lock on the shard.
+    fn get_hash_and_idx(&self, value: &[u8]) -> (u64, usize) {
         let hash = self.hash_builder.hash_one(value);
         // copied from https://github.com/xacrimon/dashmap/blob/366ce7e7872866a06de66eb95002fa6cf2c117a7/src/lib.rs#L419
         let idx = ((hash << 7) >> self.shift) as usize;
-        let shard = self.shards[idx].lock();
-        (hash, shard)
+        (hash, idx)
     }
 
     fn hasher(&self, value: &Arc<[u8]>) -> u64 {
@@ -34,16 +38,37 @@ impl ShardedSet {
     }
 
     pub(crate) fn get_from_existing_ref(&self, value: &[u8]) -> Option<Arc<[u8]>> {
-        let (hash, shard) = self.get_hash_and_shard(value);
-        shard
+        let (hash, idx) = self.get_hash_and_idx(value);
+        // `find` takes `&self`, so a shared read lock is enough.
+        self.shards[idx]
+            .read()
             .find(hash, |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()))
             .cloned()
     }
 
     pub(crate) fn get_or_insert(&self, value: &[u8]) -> Arc<[u8]> {
-        let (hash, mut shard) = self.get_hash_and_shard(value);
+        let (hash, idx) = self.get_hash_and_idx(value);
 
-        shard
+        // Hot path: most `Interned::new` calls hit an existing entry. Take a
+        // shared read lock so concurrent readers proceed in parallel. Cloning
+        // the `Arc` under the read lock bumps its strong count, which keeps a
+        // concurrent remover (which only removes under the write lock and
+        // re-checks the strong count there) from removing it out from under us.
+        if let Some(found) = self.shards[idx]
+            .read()
+            .find(hash, |o| o.deref() == value)
+            .cloned()
+        {
+            return found;
+        }
+
+        // Miss: drop the read lock (the `if let` guard is already released
+        // here) and take the write lock to insert. The `entry` API re-checks
+        // under the write lock, so a value inserted by another thread between
+        // releasing the read lock and acquiring the write lock is found rather
+        // than duplicated.
+        self.shards[idx]
+            .write()
             .entry(hash, |o| o.deref() == value, |o| self.hasher(o))
             .or_insert_with(|| Arc::from(value))
             .get()
@@ -60,14 +85,23 @@ impl ShardedSet {
             return;
         }
 
-        let (hash, mut shard) = self.get_hash_and_shard(value);
+        let (hash, idx) = self.get_hash_and_idx(value);
+
+        // Removal happens exclusively under the write lock. This is what makes
+        // the read-locked lookup in `get_or_insert` / `get_from_existing_ref`
+        // sound: a reader holding the shared read lock has already incremented
+        // the strong count before this writer can acquire the exclusive lock,
+        // so the re-check below sees the higher count and bails.
+        let mut shard = self.shards[idx].write();
 
         let Ok(entry) = shard.find_entry(hash, |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()))
         else {
             return;
         };
 
-        // check again in case the value has been cloned
+        // check again in case the value has been cloned (e.g. by a concurrent
+        // reader) between the lock-free fast-path check above and acquiring the
+        // write lock.
         if Arc::strong_count(entry.get()) > MINIMUM_STRONG_COUNT {
             return;
         }
@@ -80,18 +114,21 @@ impl ShardedSet {
     }
 
     pub(crate) fn len(&self) -> usize {
-        self.shards.iter().map(|o| o.lock().len()).sum()
+        // One shard locked (and released) at a time; never nest shard locks.
+        self.shards.iter().map(|o| o.read().len()).sum()
     }
 
     pub(crate) fn capacity(&self) -> usize {
-        self.shards.iter().map(|o| o.lock().capacity()).sum()
+        // One shard locked (and released) at a time; never nest shard locks.
+        self.shards.iter().map(|o| o.read().capacity()).sum()
     }
 
     pub(crate) fn get_memory_usage(&self) -> MemoryUsage {
         self.shards
             .iter()
             .map(|o| {
-                let o = o.lock();
+                // One shard locked (and released) at a time; never nest locks.
+                let o = o.read();
                 MemoryUsage {
                     len: o.len(),
                     capacity: o.capacity(),
@@ -106,7 +143,7 @@ impl ShardedSet {
 
     pub(crate) fn shrink_to_fit(&self) {
         for shard in self.shards.iter() {
-            shard.lock().shrink_to_fit(|o| self.hasher(o));
+            shard.write().shrink_to_fit(|o| self.hasher(o));
         }
     }
 }
