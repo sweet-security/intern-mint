@@ -200,7 +200,7 @@ fn re_intern_borrow_same_ptr() {
 #[test]
 #[serial]
 fn validate_data_hash() {
-    let hash_builder = ahash::RandomState::new();
+    let hash_builder = foldhash::fast::RandomState::default();
 
     let hash_data = |data: &Interned| {
         let mut hasher = hash_builder.build_hasher();

@@ -12,8 +12,8 @@ all-features = true
 rustdoc-args = ["--cfg=docsrs"]
 
 [dependencies]
-ahash = "0.8.12"
 bstr = { version = "1.12.1", optional = true }
+foldhash = "0.2.0"
 hashbrown = { version = "0.17.0", default-features = false }
 parking_lot = "0.12.5"
 serde = { version = "1.0.228", optional = true }

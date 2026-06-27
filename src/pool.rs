@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::LazyLock};
+use std::{hash::BuildHasher, ops::Deref, sync::LazyLock};
 
 use hashbrown::HashTable;
 use parking_lot::{Mutex, MutexGuard};
@@ -15,7 +15,7 @@ pub struct MemoryUsage {
 
 pub(crate) struct ShardedSet {
     pub(crate) shift: usize,
-    pub(crate) hash_builder: ahash::RandomState,
+    pub(crate) hash_builder: foldhash::fast::RandomState,
     pub(crate) shards: Box<[Shard]>,
 }
 
