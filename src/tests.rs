@@ -241,6 +241,27 @@ fn validate_data_hash() {
 
 #[test]
 #[serial]
+fn memory_usage_bytes() {
+    {
+        let _a = Interned::new(b"hello"); // 5 bytes
+        let _b = Interned::new(b"world!"); // 6 bytes
+        // clone of "hello" — same pointer, must NOT double-count
+        let _c = _a.clone();
+
+        let usage = pool::get_memory_usage();
+        // 2 distinct entries: 5 + 6 = 11 payload bytes
+        assert_eq!(
+            usage.bytes, 11,
+            "bytes should sum payload lengths of distinct entries"
+        );
+        // len counts distinct entries (plus the default empty-slice entry at index 0)
+        assert!(usage.len >= 2);
+    }
+    verify_empty();
+}
+
+#[test]
+#[serial]
 #[cfg(feature = "serde")]
 fn serde() {
     let a = Interned::new(b"hello");
