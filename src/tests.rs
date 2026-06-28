@@ -241,6 +241,20 @@ fn validate_data_hash() {
 
 #[test]
 #[serial]
+fn debug_format_works_without_bstr() {
+    // Finding #8: Debug must be available even without the `bstr` feature.
+    // `format!("{:?}", ...)` must compile and produce a non-empty string.
+    let a = Interned::new(b"hi");
+    let s = format!("{:?}", a);
+    assert!(!s.is_empty());
+
+    let borrowed: &BorrowedInterned = &a;
+    let bs = format!("{:?}", borrowed);
+    assert!(!bs.is_empty());
+}
+
+#[test]
+#[serial]
 #[cfg(feature = "serde")]
 fn serde() {
     let a = Interned::new(b"hello");

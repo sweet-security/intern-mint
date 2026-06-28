@@ -1,5 +1,6 @@
 use std::{
     cmp::Ordering,
+    fmt::{self, Debug},
     hash::{Hash, Hasher},
     ops::Deref,
 };
@@ -149,6 +150,12 @@ impl PartialOrd for BorrowedInterned {
 impl Ord for BorrowedInterned {
     fn cmp(&self, other: &Self) -> Ordering {
         self.deref().cmp(other.deref())
+    }
+}
+
+impl Debug for BorrowedInterned {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self.deref(), f)
     }
 }
 

@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     ffi::OsStr,
-    fmt::{Debug, Display, Formatter},
+    fmt::{Display, Formatter},
     ops::Deref,
     path::Path,
 };
@@ -37,18 +37,6 @@ impl Display for Interned {
 impl Display for BorrowedInterned {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         Display::fmt(self.as_bstr(), f)
-    }
-}
-
-impl Debug for Interned {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        Debug::fmt(self as &BorrowedInterned, f)
-    }
-}
-
-impl Debug for BorrowedInterned {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        Debug::fmt(self.as_bstr(), f)
     }
 }
 
