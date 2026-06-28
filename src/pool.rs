@@ -76,7 +76,7 @@ impl ShardedSet {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.shards.iter().all(|s| s.lock().is_empty())
     }
 
     pub(crate) fn len(&self) -> usize {
