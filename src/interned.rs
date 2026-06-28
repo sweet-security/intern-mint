@@ -2,6 +2,7 @@ use std::{
     borrow::Borrow,
     cmp::Ordering,
     ffi::{OsStr, OsString},
+    fmt::{self, Debug},
     hash::{Hash, Hasher},
     ops::Deref,
     path::{Path, PathBuf},
@@ -147,6 +148,12 @@ impl From<PathBuf> for Interned {
 impl From<&PathBuf> for Interned {
     fn from(value: &PathBuf) -> Self {
         value.as_os_str().into()
+    }
+}
+
+impl Debug for Interned {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self.deref(), f)
     }
 }
 

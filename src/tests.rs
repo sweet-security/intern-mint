@@ -241,6 +241,25 @@ fn validate_data_hash() {
 
 #[test]
 #[serial]
+fn debug_format_works_without_bstr() {
+    // Finding #8: Debug must be available even without the `bstr` feature.
+    // `format!("{:?}", ...)` must compile and produce a readable quoted string.
+    let a = Interned::new(b"hi");
+    let s = format!("{:?}", a);
+    assert!(s.contains("\"hi\""), "expected quoted form, got: {s}");
+
+    let borrowed: &BorrowedInterned = &a;
+    let bs = format!("{:?}", borrowed);
+    assert!(bs.contains("\"hi\""), "expected quoted form, got: {bs}");
+
+    // Non-UTF-8 bytes should be escaped, not panic
+    let non_utf8 = Interned::new(b"\xff");
+    let ns = format!("{:?}", non_utf8);
+    assert!(ns.contains("\\xff"), "expected escaped form, got: {ns}");
+}
+
+#[test]
+#[serial]
 #[cfg(feature = "serde")]
 fn serde() {
     let a = Interned::new(b"hello");
