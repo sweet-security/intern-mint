@@ -32,7 +32,7 @@ impl<'de> Deserialize<'de> for Interned {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_any(InternedVisitor)
+        deserializer.deserialize_byte_buf(InternedVisitor)
     }
 }
 

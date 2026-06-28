@@ -271,3 +271,14 @@ fn serde_json_non_utf8_round_trip() {
     assert_eq!(&a[..], &b[..]);
     assert_eq!(a.as_ptr(), b.as_ptr());
 }
+
+#[test]
+#[serial]
+#[cfg(feature = "serde")]
+fn serde_bincode_round_trip() {
+    let a = Interned::new(b"\xff\xfe\x00binary");
+    let bytes = bincode::serialize(&a).expect("serialize");
+    let b = bincode::deserialize::<Interned>(&bytes).expect("deserialize");
+    assert_eq!(&a[..], &b[..]);
+    assert_eq!(a.as_ptr(), b.as_ptr());
+}
