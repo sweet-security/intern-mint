@@ -134,18 +134,53 @@ impl Default for ShardedSet {
 
 pub(crate) static POOL: LazyLock<ShardedSet> = LazyLock::new(Default::default);
 
+/// Returns `true` if the pool contains no interned values.
+///
+/// # Atomicity
+///
+/// This is a best-effort point-in-time snapshot. Each shard is locked independently and
+/// released before the next is queried, so the result may not reflect an atomic view of
+/// the pool. Under concurrent mutation (interning or dropping values), the returned value
+/// may not be self-consistent — for example, the pool may appear non-empty even if all
+/// values were dropped before this call returns, or vice versa.
 pub fn is_empty() -> bool {
     POOL.is_empty()
 }
 
+/// Returns the total number of interned values currently held in the pool.
+///
+/// # Atomicity
+///
+/// This is a best-effort point-in-time snapshot. Each shard is locked independently and
+/// released before the next is queried, so the result may not reflect an atomic view of
+/// the pool. Under concurrent mutation (interning or dropping values), the returned count
+/// may not be self-consistent — values may be added or removed between shard acquisitions,
+/// causing the sum to be transiently higher or lower than any real instantaneous count.
 pub fn len() -> usize {
     POOL.len()
 }
 
+/// Returns the total hash-table slot capacity across all shards.
+///
+/// # Atomicity
+///
+/// This is a best-effort point-in-time snapshot. Each shard is locked independently and
+/// released before the next is queried, so the result may not reflect an atomic view of
+/// the pool. Under concurrent mutation or rehashing, the returned capacity may not be
+/// self-consistent with [`len`] or with itself across repeated calls.
 pub fn capacity() -> usize {
     POOL.capacity()
 }
 
+/// Returns a [`MemoryUsage`] snapshot of the pool's current entry count and slot capacity.
+///
+/// # Atomicity
+///
+/// This is a best-effort point-in-time snapshot. Each shard is locked independently and
+/// released before the next is queried, so the result may not reflect an atomic view of
+/// the pool. Under concurrent mutation or rehashing, the fields of the returned
+/// [`MemoryUsage`] (e.g. `len` and `capacity`) may not be mutually self-consistent —
+/// they may have been sampled from different pool states.
 pub fn get_memory_usage() -> MemoryUsage {
     POOL.get_memory_usage()
 }
