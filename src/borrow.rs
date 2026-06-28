@@ -129,12 +129,30 @@ impl Deref for BorrowedInterned {
 }
 
 impl PartialEq for BorrowedInterned {
+    /// Compares by **pointer identity** rather than data content.
+    ///
+    /// This is sound and consistent with [`Ord`] because the global intern pool upholds a
+    /// deduplication invariant: for any two live [`BorrowedInterned`] values, equal data implies
+    /// equal pointers (the pool returns the same [`triomphe::Arc`] allocation for the same byte
+    /// sequence). Consequently:
+    ///
+    /// - `ptr_a == ptr_b` ⟺ `data_a == data_b` (for live entries)
+    /// - `cmp(a, b) == Equal` ⟺ `data_a == data_b` ⟺ `ptr_a == ptr_b` ⟺ `eq(a, b)`
+    ///
+    /// The [`Ord`] / [`PartialOrd`] impls compare by data; equality under [`Ord`] therefore
+    /// coincides with pointer equality under [`PartialEq`], so the `Ord`/`Eq` contract
+    /// (`a == b` ↔ `a.cmp(b) == Ordering::Equal`) holds.
     fn eq(&self, other: &Self) -> bool {
         std::ptr::addr_eq(self.as_ptr(), other.as_ptr())
     }
 }
 
 impl Hash for BorrowedInterned {
+    /// Hashes by **pointer address** rather than data content, consistent with the pointer-based
+    /// [`PartialEq`] impl.
+    ///
+    /// See [`PartialEq`] for why pointer equality is equivalent to data equality for live interned
+    /// values (the pool deduplication invariant).
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.as_ptr().hash(state);
     }
@@ -147,6 +165,13 @@ impl PartialOrd for BorrowedInterned {
 }
 
 impl Ord for BorrowedInterned {
+    /// Compares by **data content** (lexicographic byte order), consistent with [`PartialEq`].
+    ///
+    /// Although [`PartialEq`] uses pointer identity and [`Ord`] uses data, the two are consistent
+    /// because the pool's deduplication invariant guarantees that same-data ⟺ same-pointer for
+    /// any two live values. Therefore `cmp(a, b) == Ordering::Equal` if and only if
+    /// `a.as_ptr() == b.as_ptr()`, satisfying the requirement that `a == b` ↔
+    /// `a.cmp(b) == Ordering::Equal`.
     fn cmp(&self, other: &Self) -> Ordering {
         self.deref().cmp(other.deref())
     }
