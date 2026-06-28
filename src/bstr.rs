@@ -16,11 +16,23 @@ impl BorrowedInterned {
     }
 
     pub fn as_path(&self) -> Cow<'_, Path> {
-        self.as_bstr().to_path_lossy()
+        Cow::Borrowed(Path::new(self.as_os_str_ref()))
     }
 
     pub fn as_os_str(&self) -> Cow<'_, OsStr> {
-        self.as_bstr().to_os_str_lossy()
+        Cow::Borrowed(self.as_os_str_ref())
+    }
+
+    fn as_os_str_ref(&self) -> &OsStr {
+        // SAFETY: `self.deref()` returns the exact bytes that were stored when this value was
+        // interned, unchanged. When the value was interned from an `OsStr`/`OsString`/`Path`/
+        // `PathBuf` (`Interned`'s `From<&OsStr>`/`From<&OsString>`/`From<&Path>`/... impls in
+        // `interned.rs`), those bytes were produced by `OsStr::as_encoded_bytes()` on this same
+        // platform and Rust build, which is exactly the documented precondition of
+        // `OsStr::from_encoded_bytes_unchecked` (a self-contained slice from `as_encoded_bytes()`,
+        // not split across an encoded boundary). This reconstructs the original `OsStr` losslessly,
+        // including non-UTF-8 contents, instead of the previous UTF-8-lossy conversion.
+        unsafe { OsStr::from_encoded_bytes_unchecked(self.deref()) }
     }
 
     pub fn as_str(&self) -> Cow<'_, str> {

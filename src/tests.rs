@@ -241,6 +241,27 @@ fn validate_data_hash() {
 
 #[test]
 #[serial]
+#[cfg(all(feature = "bstr", unix))]
+fn os_str_non_utf8_round_trip() {
+    use std::{ffi::OsStr, os::unix::ffi::OsStrExt, path::Path};
+
+    {
+        // Bytes that are not valid UTF-8 (a lone 0xff / 0xfe) must survive a round-trip
+        // through interning, rather than being mangled into U+FFFD.
+        let raw = b"/tmp/\xff\xfe/file";
+        let os_str = OsStr::from_bytes(raw);
+
+        let interned = Interned::from(os_str);
+
+        assert_eq!(interned.as_os_str().as_bytes(), raw);
+        assert_eq!(interned.as_os_str(), os_str);
+        assert_eq!(interned.as_path(), Path::new(os_str));
+    }
+    verify_empty();
+}
+
+#[test]
+#[serial]
 #[cfg(feature = "serde")]
 fn serde() {
     let a = Interned::new(b"hello");
