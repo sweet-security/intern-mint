@@ -56,15 +56,33 @@ impl BorrowedInterned {
         unsafe { &*(value as *const [u8] as *const BorrowedInterned) }
     }
 
-    /// Constructs back an [Interned] value from the given &[BorrowedInterned]
+    /// Constructs back an [Interned] value from the given `&BorrowedInterned`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying pool entry is no longer present. In safe code this
+    /// cannot happen because a `&BorrowedInterned` can only be obtained from a live
+    /// [Interned] (which keeps the entry alive). If you need a non-panicking variant,
+    /// use [`try_intern`][BorrowedInterned::try_intern].
     ///
     /// Note that using this function has almost the same performance penalty as using
-    /// [Interned::new]
+    /// [Interned::new].
+    #[track_caller]
     pub fn intern(&self) -> Interned {
-        Interned::from_existing(
-            POOL.get_from_existing_ref(self.deref())
-                .expect("borrowed values must already exist in the pool"),
-        )
+        self.try_intern()
+            .expect("pool entry is missing; the BorrowedInterned must outlive its Interned owner")
+    }
+
+    /// Attempts to construct an [Interned] value from the given `&BorrowedInterned`,
+    /// returning `None` if the pool entry is no longer present.
+    ///
+    /// In safe code this always returns `Some`, because a `&BorrowedInterned` can only
+    /// be obtained from a live [Interned] (which keeps the pool entry alive). This
+    /// method is provided as a non-panicking alternative to [`intern`][BorrowedInterned::intern]
+    /// for callers who need to handle the absence case gracefully.
+    pub fn try_intern(&self) -> Option<Interned> {
+        POOL.get_from_existing_ref(self.deref())
+            .map(Interned::from_existing)
     }
 
     /// The default [Hash] trait implementation for [BorrowedInterned] is to hash the pointer
@@ -155,6 +173,10 @@ impl Ord for BorrowedInterned {
 impl ToOwned for BorrowedInterned {
     type Owned = Interned;
 
+    /// Converts `&BorrowedInterned` back into an owned [Interned].
+    ///
+    /// Delegates to [`intern`][BorrowedInterned::intern]; see also the non-panicking
+    /// [`try_intern`][BorrowedInterned::try_intern].
     fn to_owned(&self) -> Self::Owned {
         self.intern()
     }

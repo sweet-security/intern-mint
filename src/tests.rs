@@ -199,6 +199,23 @@ fn re_intern_borrow_same_ptr() {
 
 #[test]
 #[serial]
+fn try_intern_returns_some_for_live_borrow() {
+    {
+        let interned = Interned::new(b"try_intern_test");
+        let borrowed: &BorrowedInterned = &interned;
+        let result = borrowed.try_intern();
+        assert!(
+            result.is_some(),
+            "try_intern should return Some for a live pool entry"
+        );
+        let re_interned = result.unwrap();
+        assert_eq!(interned.as_ptr(), re_interned.as_ptr());
+    }
+    verify_empty();
+}
+
+#[test]
+#[serial]
 fn validate_data_hash() {
     let hash_builder = ahash::RandomState::new();
 
