@@ -248,3 +248,26 @@ fn serde() {
     let b = serde_json::from_str::<Interned>(&serialized).expect("deserialize");
     assert_eq!(a.as_ptr(), b.as_ptr());
 }
+
+#[test]
+#[serial]
+#[cfg(feature = "serde")]
+fn serde_json_utf8_is_string() {
+    let a = Interned::new(b"hello");
+    let serialized = serde_json::to_string(&a).expect("serialize");
+    // JSON of valid UTF-8 must be the string "hello", not a byte array.
+    assert_eq!(serialized, r#""hello""#);
+}
+
+#[test]
+#[serial]
+#[cfg(feature = "serde")]
+fn serde_json_non_utf8_round_trip() {
+    let a = Interned::new(b"\xff\xfe");
+    let serialized = serde_json::to_string(&a).expect("serialize");
+    let b = serde_json::from_str::<Interned>(&serialized).expect("deserialize");
+    // Non-UTF-8 bytes must survive the round-trip losslessly.
+    assert_eq!(&a[..], b"\xff\xfe");
+    assert_eq!(&a[..], &b[..]);
+    assert_eq!(a.as_ptr(), b.as_ptr());
+}
