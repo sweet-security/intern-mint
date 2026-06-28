@@ -3,7 +3,7 @@ use std::{
     ffi::OsStr,
     fmt::{Debug, Display, Formatter},
     ops::Deref,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use bstr::{BStr, BString, ByteSlice};
@@ -15,24 +15,61 @@ impl BorrowedInterned {
         BStr::new(self.deref())
     }
 
+    /// Returns the interned bytes as a [`Path`].
+    ///
+    /// This is implemented in terms of [`as_os_str`](Self::as_os_str), so it inherits the same
+    /// platform behavior: on unix it is a lossless, zero-copy borrow of the interned bytes; on
+    /// non-unix platforms (Windows/WASI) it is a best-effort lossy conversion. See
+    /// [`as_os_str`](Self::as_os_str) for details.
     pub fn as_path(&self) -> Cow<'_, Path> {
-        Cow::Borrowed(Path::new(self.as_os_str_ref()))
+        match self.as_os_str() {
+            Cow::Borrowed(os_str) => Cow::Borrowed(Path::new(os_str)),
+            Cow::Owned(os_string) => Cow::Owned(PathBuf::from(os_string)),
+        }
     }
 
+    /// Returns the interned bytes as an [`OsStr`].
+    ///
+    /// On unix this is lossless and zero-copy: a unix [`OsStr`] is just bytes, so the interned
+    /// bytes are reconstructed exactly (including non-UTF-8 contents) via
+    /// [`OsStrExt::from_bytes`](std::os::unix::ffi::OsStrExt::from_bytes) and returned as a
+    /// [`Cow::Borrowed`].
+    ///
+    /// On non-unix platforms (Windows/WASI) the result is a best-effort *lossy* conversion:
+    /// invalid sequences are replaced with the U+FFFD replacement character. The standard library
+    /// has no *safe* lossless reconstruction of an [`OsStr`] from arbitrary bytes on those
+    /// platforms — the only lossless option, `OsStr::from_encoded_bytes_unchecked`, is `unsafe` and
+    /// would be unsound here because an [`Interned`] may have been created from arbitrary bytes
+    /// (e.g. `Interned::new(b"\xff\xff")`) that are not valid WTF-8.
+    ///
+    /// A lossless-on-Windows path could be offered later as an explicit `unsafe` opt-in method
+    /// whose caller guarantees the interned bytes have [`OsStr`] provenance.
+    #[cfg(unix)]
     pub fn as_os_str(&self) -> Cow<'_, OsStr> {
-        Cow::Borrowed(self.as_os_str_ref())
+        use std::os::unix::ffi::OsStrExt;
+
+        Cow::Borrowed(OsStr::from_bytes(self.deref()))
     }
 
-    fn as_os_str_ref(&self) -> &OsStr {
-        // SAFETY: `self.deref()` returns the exact bytes that were stored when this value was
-        // interned, unchanged. When the value was interned from an `OsStr`/`OsString`/`Path`/
-        // `PathBuf` (`Interned`'s `From<&OsStr>`/`From<&OsString>`/`From<&Path>`/... impls in
-        // `interned.rs`), those bytes were produced by `OsStr::as_encoded_bytes()` on this same
-        // platform and Rust build, which is exactly the documented precondition of
-        // `OsStr::from_encoded_bytes_unchecked` (a self-contained slice from `as_encoded_bytes()`,
-        // not split across an encoded boundary). This reconstructs the original `OsStr` losslessly,
-        // including non-UTF-8 contents, instead of the previous UTF-8-lossy conversion.
-        unsafe { OsStr::from_encoded_bytes_unchecked(self.deref()) }
+    /// Returns the interned bytes as an [`OsStr`].
+    ///
+    /// On unix this is lossless and zero-copy: a unix [`OsStr`] is just bytes, so the interned
+    /// bytes are reconstructed exactly (including non-UTF-8 contents) via
+    /// [`OsStrExt::from_bytes`](std::os::unix::ffi::OsStrExt::from_bytes) and returned as a
+    /// [`Cow::Borrowed`].
+    ///
+    /// On non-unix platforms (Windows/WASI) the result is a best-effort *lossy* conversion:
+    /// invalid sequences are replaced with the U+FFFD replacement character. The standard library
+    /// has no *safe* lossless reconstruction of an [`OsStr`] from arbitrary bytes on those
+    /// platforms — the only lossless option, `OsStr::from_encoded_bytes_unchecked`, is `unsafe` and
+    /// would be unsound here because an [`Interned`] may have been created from arbitrary bytes
+    /// (e.g. `Interned::new(b"\xff\xff")`) that are not valid WTF-8.
+    ///
+    /// A lossless-on-Windows path could be offered later as an explicit `unsafe` opt-in method
+    /// whose caller guarantees the interned bytes have [`OsStr`] provenance.
+    #[cfg(not(unix))]
+    pub fn as_os_str(&self) -> Cow<'_, OsStr> {
+        self.as_bstr().to_os_str_lossy()
     }
 
     pub fn as_str(&self) -> Cow<'_, str> {
