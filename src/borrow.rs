@@ -155,7 +155,7 @@ impl Ord for BorrowedInterned {
 
 impl Debug for BorrowedInterned {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Debug::fmt(self.deref(), f)
+        write!(f, "\"{}\"", self.deref().escape_ascii())
     }
 }
 
