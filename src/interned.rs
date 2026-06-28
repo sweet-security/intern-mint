@@ -62,12 +62,31 @@ impl Deref for Interned {
 }
 
 impl PartialEq for Interned {
+    /// Compares by **pointer identity** rather than data content (delegates to
+    /// [`BorrowedInterned::eq`]).
+    ///
+    /// This is sound and consistent with [`Ord`] because the global intern pool upholds a
+    /// deduplication invariant: for any two live [`Interned`] values, equal data implies equal
+    /// pointers (the pool returns the same [`triomphe::Arc`] allocation for the same byte
+    /// sequence). Consequently:
+    ///
+    /// - `ptr_a == ptr_b` ⟺ `data_a == data_b` (for live entries)
+    /// - `cmp(a, b) == Equal` ⟺ `data_a == data_b` ⟺ `ptr_a == ptr_b` ⟺ `eq(a, b)`
+    ///
+    /// The [`Ord`] / [`PartialOrd`] impls compare by data; equality under [`Ord`] therefore
+    /// coincides with pointer equality under [`PartialEq`], so the `Ord`/`Eq` contract
+    /// (`a == b` ↔ `a.cmp(b) == Ordering::Equal`) holds.
     fn eq(&self, other: &Self) -> bool {
         self.deref().eq(other)
     }
 }
 
 impl Hash for Interned {
+    /// Hashes by **pointer address** rather than data content, consistent with the pointer-based
+    /// [`PartialEq`] impl (delegates to [`BorrowedInterned::hash`]).
+    ///
+    /// See [`PartialEq`] for why pointer equality is equivalent to data equality for live interned
+    /// values (the pool deduplication invariant).
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.deref().hash(state)
     }
@@ -80,6 +99,14 @@ impl PartialOrd for Interned {
 }
 
 impl Ord for Interned {
+    /// Compares by **data content** (lexicographic byte order, delegates to
+    /// [`BorrowedInterned::cmp`]), consistent with [`PartialEq`].
+    ///
+    /// Although [`PartialEq`] uses pointer identity and [`Ord`] uses data, the two are consistent
+    /// because the pool's deduplication invariant guarantees that same-data ⟺ same-pointer for
+    /// any two live values. Therefore `cmp(a, b) == Ordering::Equal` if and only if
+    /// `a.as_ptr() == b.as_ptr()`, satisfying the requirement that `a == b` ↔
+    /// `a.cmp(b) == Ordering::Equal`.
     fn cmp(&self, other: &Self) -> Ordering {
         self.deref().cmp(other)
     }
