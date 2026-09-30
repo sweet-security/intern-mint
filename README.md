@@ -16,12 +16,14 @@ This can potentially save memory and avoid allocations in environments where dat
 
 ## Technical details
 
-Slices are kept as `Arc<[u8]>`s using the [triomphe](https://github.com/Manishearth/triomphe) crate for a smaller footprint.
+Each slice is stored in a single allocation, together with a small header holding its length, its hash, and the number of live handles pointing to it.
+`Interned` is a thin pointer to that allocation, so it takes the size of a single pointer (as does `Option<Interned>`).
 
-The `Arc`s are then stored in a global static pool implemented as a dumbed-down version of [DashMap](https://github.com/xacrimon/dashmap).
+The entries are stored in a global static pool implemented as a dumbed-down version of [DashMap](https://github.com/xacrimon/dashmap).
 The pool consists of `N` shards (dependent on [available_parallelism](https://doc.rust-lang.org/beta/std/thread/fn.available_parallelism.html)) of [hashbrown](https://github.com/rust-lang/hashbrown) hash-tables, sharded by the slices' hashes, to avoid locking the entire table for each lookup.
 
-When a slice is dropped, the total reference count is checked, and the slice is removed from the pool if needed.
+Cloning and dropping an `Interned` only update the handle count atomically, without locking.
+Only the drop that releases the last handle locks the slice's shard, checks that no new handle was created in the meantime, and removes the slice from the pool.
 
 ## Interned and BorrowedInterned
 

@@ -17,7 +17,6 @@ bstr = { version = "1.12.1", optional = true }
 hashbrown = { version = "0.17.0", default-features = false }
 parking_lot = "0.12.5"
 serde = { version = "1.0.228", optional = true }
-triomphe = { version = "0.1.15", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports"] }

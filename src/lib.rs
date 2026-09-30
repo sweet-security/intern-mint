@@ -4,6 +4,7 @@
 pub mod borrow;
 #[cfg(feature = "bstr")]
 pub mod bstr;
+mod entry;
 pub mod interned;
 pub mod pool;
 #[cfg(feature = "serde")]
