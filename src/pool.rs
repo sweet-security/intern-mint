@@ -118,9 +118,9 @@ impl Default for ShardedSet {
             (std::thread::available_parallelism().map_or(1, usize::from) * 4).next_power_of_two()
         });
 
-        // copied from https://github.com/xacrimon/dashmap/blob/366ce7e7872866a06de66eb95002fa6cf2c117a7/src/lib.rs#L269
-        let shift =
-            (std::mem::size_of::<usize>() * 8) - DEFAULT_SHARDS_COUNT.trailing_zeros() as usize;
+        // based on https://github.com/xacrimon/dashmap/blob/366ce7e7872866a06de66eb95002fa6cf2c117a7/src/lib.rs#L269
+        // using the width of the u64 hash rather than usize, which is narrower on 32-bit targets
+        let shift = (u64::BITS - DEFAULT_SHARDS_COUNT.trailing_zeros()) as usize;
 
         Self {
             shift,
