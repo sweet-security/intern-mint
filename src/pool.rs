@@ -1,10 +1,11 @@
-use std::{ops::Deref, sync::LazyLock};
+use std::sync::LazyLock;
 
 use hashbrown::HashTable;
 use parking_lot::{Mutex, MutexGuard};
-use triomphe::Arc;
 
-type LockedShard = HashTable<Arc<[u8]>>;
+use crate::entry::Entry;
+
+type LockedShard = HashTable<Entry>;
 type Shard = Mutex<LockedShard>;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -20,59 +21,76 @@ pub(crate) struct ShardedSet {
 }
 
 impl ShardedSet {
+    fn get_shard(&self, hash: u64) -> MutexGuard<'_, LockedShard> {
+        // copied from https://github.com/xacrimon/dashmap/blob/366ce7e7872866a06de66eb95002fa6cf2c117a7/src/lib.rs#L419
+        let idx = ((hash << 7) >> self.shift) as usize;
+        self.shards[idx].lock()
+    }
+
     fn get_hash_and_shard(&self, value: &[u8]) -> (u64, MutexGuard<'_, LockedShard>) {
         // hash before locking
         let hash = self.hash_builder.hash_one(value);
-        // copied from https://github.com/xacrimon/dashmap/blob/366ce7e7872866a06de66eb95002fa6cf2c117a7/src/lib.rs#L419
-        let idx = ((hash << 7) >> self.shift) as usize;
-        let shard = self.shards[idx].lock();
-        (hash, shard)
+        (hash, self.get_shard(hash))
     }
 
-    fn hasher(&self, value: &Arc<[u8]>) -> u64 {
-        self.hash_builder.hash_one(value.deref())
-    }
-
-    pub(crate) fn get_from_existing_ref(&self, value: &[u8]) -> Option<Arc<[u8]>> {
+    pub(crate) fn get_from_existing_ref(&self, value: &[u8]) -> Option<Entry> {
         let (hash, shard) = self.get_hash_and_shard(value);
         shard
-            .find(hash, |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()))
-            .cloned()
+            .find(hash, |o| std::ptr::eq(o.data_ptr(), value.as_ptr()))
+            // Safety: the shard is locked
+            .map(|o| unsafe { o.acquire() })
     }
 
-    pub(crate) fn get_or_insert(&self, value: &[u8]) -> Arc<[u8]> {
+    pub(crate) fn get_or_insert(&self, value: &[u8]) -> Entry {
         let (hash, mut shard) = self.get_hash_and_shard(value);
 
-        shard
-            .entry(hash, |o| o.deref() == value, |o| self.hasher(o))
-            .or_insert_with(|| Arc::from(value))
-            .get()
-            .clone()
+        // Safety: entries are only accessed while the shard is locked
+        let entry = shard
+            .entry(
+                hash,
+                |o| unsafe { o.data() } == value,
+                |o| unsafe { o.hash() },
+            )
+            .or_insert_with(|| Entry::new(value, hash));
+
+        // Safety: the shard is locked
+        unsafe { entry.get().acquire() }
     }
 
-    /// Only try to remove values from the pool when the reference count is two
-    /// one for the given [value] and another for the reference in the pool
-    pub(crate) fn remove_if_needed(&self, value: &Arc<[u8]>) {
-        // one count for `value` and one for the entry in our pool
-        const MINIMUM_STRONG_COUNT: usize = 2;
+    /// Gives up a handle, removing `entry` from the pool if it was the last one
+    ///
+    /// # Safety
+    ///
+    /// The caller must own the handle being given up, and must not use it after this call
+    pub(crate) unsafe fn release(&self, entry: Entry) {
+        // read before releasing, since another thread may free the entry right after
+        // Safety: the handle being given up keeps the entry alive until then
+        let hash = unsafe { entry.hash() };
 
-        if Arc::strong_count(value) > MINIMUM_STRONG_COUNT {
+        // Safety: guaranteed by the caller
+        if !unsafe { entry.release() } {
             return;
         }
 
-        let (hash, mut shard) = self.get_hash_and_shard(value);
+        // `entry` may be dangling from here on, so it's only compared by address
+        let mut shard = self.get_shard(hash);
 
-        let Ok(entry) = shard.find_entry(hash, |o| std::ptr::addr_eq(o.as_ptr(), value.as_ptr()))
-        else {
+        let Ok(found) = shard.find_entry(hash, |o| *o == entry) else {
+            // another thread already removed it
             return;
         };
 
-        // check again in case the value has been cloned
-        if Arc::strong_count(entry.get()) > MINIMUM_STRONG_COUNT {
+        // check again in case a new handle was acquired before the shard was locked
+        // Safety: the shard is locked
+        if !unsafe { found.get().is_unused() } {
             return;
         }
 
-        entry.remove();
+        let (removed, _) = found.remove();
+        // free outside of the lock
+        drop(shard);
+        // Safety: the entry was removed with no handles left, so nothing can reach it anymore
+        unsafe { removed.free() };
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -106,7 +124,8 @@ impl ShardedSet {
 
     pub(crate) fn shrink_to_fit(&self) {
         for shard in self.shards.iter() {
-            shard.lock().shrink_to_fit(|o| self.hasher(o));
+            // Safety: the shard is locked
+            shard.lock().shrink_to_fit(|o| unsafe { o.hash() });
         }
     }
 }

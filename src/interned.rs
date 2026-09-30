@@ -8,14 +8,14 @@ use std::{
     sync::LazyLock,
 };
 
-use triomphe::Arc;
+use crate::{borrow::BorrowedInterned, entry::Entry, pool::POOL};
 
-use crate::{borrow::BorrowedInterned, pool::POOL};
-
-#[derive(Clone, Eq)]
+#[derive(Eq)]
 #[repr(transparent)]
 /// The main type offered by this crate, responsible for interning slices
-pub struct Interned(Arc<[u8]>);
+///
+/// It's a thin pointer to the interned data, so it takes the size of a single pointer
+pub struct Interned(Entry);
 
 impl Interned {
     /// Constructs a new [Interned] for a given `value`
@@ -34,8 +34,15 @@ impl Interned {
         Self(POOL.get_or_insert(value))
     }
 
-    pub(crate) fn from_existing(value: Arc<[u8]>) -> Self {
-        Self(value)
+    pub(crate) fn from_existing(entry: Entry) -> Self {
+        Self(entry)
+    }
+}
+
+impl Clone for Interned {
+    fn clone(&self) -> Self {
+        // Safety: this handle keeps the entry alive
+        Self(unsafe { self.0.acquire() })
     }
 }
 
@@ -49,7 +56,8 @@ impl Default for Interned {
 
 impl Drop for Interned {
     fn drop(&mut self) {
-        POOL.remove_if_needed(&self.0);
+        // Safety: the handle was acquired from the pool and is never used again
+        unsafe { POOL.release(self.0) };
     }
 }
 
@@ -57,19 +65,22 @@ impl Deref for Interned {
     type Target = BorrowedInterned;
 
     fn deref(&self) -> &Self::Target {
-        BorrowedInterned::new(self.0.deref())
+        // Safety: this handle keeps the entry alive for as long as it's borrowed
+        BorrowedInterned::new(unsafe { self.0.data() })
     }
 }
 
 impl PartialEq for Interned {
     fn eq(&self, other: &Self) -> bool {
-        self.deref().eq(other)
+        // compare the entries directly, avoiding a heap access for the length on deref
+        self.0 == other.0
     }
 }
 
 impl Hash for Interned {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.deref().hash(state)
+        // must match the hash of [BorrowedInterned], without dereferencing
+        self.0.data_ptr().hash(state)
     }
 }
 

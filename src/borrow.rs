@@ -90,22 +90,16 @@ impl BorrowedInterned {
     ///     hasher.finish()
     /// };
     ///
-    /// let (ptr_hash_1, data_hash_1) = {
+    /// let (ptr_hash, data_hash_1) = {
     ///     let interned = Interned::new(b"hello!");
     ///     (hash_builder.hash_one(&interned), hash_data(&interned))
     /// };
     ///
-    /// let (ptr_hash_2, data_hash_2) = {
-    ///     let _a = Interned::new(b"more allocations");
-    ///     let _a = Interned::new(b"to avoid");
-    ///     let _a = Interned::new(b"same address");
+    /// // interned again after being dropped, so it may live at a different address
+    /// let data_hash_2 = hash_data(&Interned::new(b"hello!"));
     ///
-    ///     let interned = Interned::new(b"hello!");
-    ///     (hash_builder.hash_one(&interned), hash_data(&interned))
-    /// };
-    ///
-    /// // The hash of the pointers is different, but the hash of the data is the same
-    /// assert_ne!(ptr_hash_1, ptr_hash_2);
+    /// // The pointer is hashed by default, while the hash of the data stays the same
+    /// assert_ne!(ptr_hash, data_hash_1);
     /// assert_eq!(data_hash_1, data_hash_2);
     /// ```
     pub fn hash_data<H: Hasher>(&self, state: &mut H) {

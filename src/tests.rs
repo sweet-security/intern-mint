@@ -1,8 +1,10 @@
-use std::hash::{BuildHasher, Hasher};
+use std::{
+    hash::{BuildHasher, Hasher},
+    sync::Arc,
+};
 
 use parking_lot::Mutex;
 use serial_test::serial;
-use triomphe::Arc;
 
 use crate::{BorrowedInterned, Interned, pool};
 
@@ -142,6 +144,44 @@ fn multithreaded_drop() {
 
 #[test]
 #[serial]
+fn concurrent_last_drops() {
+    // all threads drop their clone of the same value at once, so the last handles are released
+    // concurrently, which used to leave entries behind in the pool
+    {
+        const THREADS: usize = 8;
+        const ITERATIONS: usize = if cfg!(miri) { 50 } else { 20_000 };
+
+        let barrier = std::sync::Barrier::new(THREADS);
+        let slots = (0..THREADS)
+            .map(|_| Mutex::new(None::<Interned>))
+            .collect::<Vec<_>>();
+
+        std::thread::scope(|scope| {
+            for thread in 0..THREADS {
+                let (barrier, slots) = (&barrier, &slots);
+                scope.spawn(move || {
+                    for i in 0..ITERATIONS {
+                        if thread == 0 {
+                            let interned = Interned::new(format!("value {i}").as_bytes());
+                            for slot in slots {
+                                *slot.lock() = Some(interned.clone());
+                            }
+                        }
+                        barrier.wait();
+                        let interned = slots[thread].lock().take();
+                        barrier.wait();
+                        drop(interned);
+                        barrier.wait();
+                    }
+                });
+            }
+        });
+    }
+    verify_empty();
+}
+
+#[test]
+#[serial]
 fn map_usage_with_borrow() {
     {
         use std::collections::HashMap;
@@ -215,25 +255,12 @@ fn validate_data_hash() {
     verify_empty();
 
     let (ptr_hash_2, data_hash_2) = {
-        let _a = Interned::new(b"a");
-        let _a = Interned::new(b"bit");
-        let _a = Interned::new(b"more");
-        let _a = Interned::new(b"allocations");
-        let _a = Interned::new(b"so");
-        let _a = Interned::new(b"we");
-        let _a = Interned::new(b"won't");
-        let _a = Interned::new(b"use");
-        let _a = Interned::new(b"the");
-        let _a = Interned::new(b"same");
-        let _a = Interned::new(b"address");
-
         let interned = Interned::new(b"hello!");
         (hash_builder.hash_one(&interned), hash_data(&interned))
     };
     verify_empty();
 
     assert_ne!(ptr_hash_1, data_hash_1);
-    assert_ne!(ptr_hash_1, ptr_hash_2);
 
     assert_ne!(ptr_hash_2, data_hash_2);
     assert_eq!(data_hash_1, data_hash_2);
@@ -247,4 +274,10 @@ fn serde() {
     let serialized = serde_json::to_string(&a).expect("serialize");
     let b = serde_json::from_str::<Interned>(&serialized).expect("deserialize");
     assert_eq!(a.as_ptr(), b.as_ptr());
+}
+
+#[test]
+fn thin_handle() {
+    assert_eq!(size_of::<Interned>(), size_of::<usize>());
+    assert_eq!(size_of::<Option<Interned>>(), size_of::<usize>());
 }
