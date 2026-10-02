@@ -8,10 +8,27 @@ use crate::entry::Entry;
 type LockedShard = HashTable<Entry>;
 type Shard = Mutex<LockedShard>;
 
+/// A point-in-time snapshot of the pool's memory usage.
+///
+/// Fields are collected by locking each shard independently, so the result is a
+/// best-effort snapshot, not an atomic view — values may not be mutually consistent
+/// under concurrent mutation.
+///
+/// The struct is `#[non_exhaustive]` so that adding fields in the future is not a
+/// breaking change; construct it via [`get_memory_usage`] rather than a struct literal.
+#[non_exhaustive]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct MemoryUsage {
+    /// Number of distinct interned entries currently alive in the pool.
     pub len: usize,
+    /// Number of hash-table slots allocated across all shards (capacity in *entries*,
+    /// not bytes).
     pub capacity: usize,
+    /// Total payload size in **bytes**: the sum of `entry.len()` over every live entry.
+    ///
+    /// This is computed by iterating all entries under each shard's lock (O(n)), which
+    /// is acceptable for an introspection/diagnostic call.
+    pub bytes: usize,
 }
 
 pub(crate) struct ShardedSet {
@@ -110,14 +127,17 @@ impl ShardedSet {
             .iter()
             .map(|o| {
                 let o = o.lock();
+                let bytes: usize = o.iter().map(|entry| entry.len()).sum();
                 MemoryUsage {
                     len: o.len(),
                     capacity: o.capacity(),
+                    bytes,
                 }
             })
             .reduce(|acc, o| MemoryUsage {
                 len: acc.len + o.len,
                 capacity: acc.capacity + o.capacity,
+                bytes: acc.bytes + o.bytes,
             })
             .unwrap_or_default()
     }
