@@ -8,7 +8,7 @@ include!("./random_strings_pool.rs");
 #[inline]
 fn use_generic<K, Q>(intern: fn(&str) -> K) -> u32
 where
-    K: Eq + Hash + Clone + Borrow<Q>,
+    K: Eq + Hash + Borrow<Q>,
     Q: Eq + Hash + ?Sized,
 {
     let mut map = HashMap::<K, u32>::with_capacity(POOL.len());
@@ -24,8 +24,7 @@ where
     let mut sum = 0;
 
     for key in map.keys() {
-        let key = key.clone();
-        let borrowed = Borrow::<Q>::borrow(&key);
+        let borrowed = Borrow::<Q>::borrow(key);
         sum += map.get(borrowed).copied().unwrap_or_default();
     }
 
