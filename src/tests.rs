@@ -13,7 +13,10 @@ fn verify_empty() {
     // create a default instance in case it didn't exist before
     let _a = Interned::default();
     assert!(pool::len() == 1);
-    assert_eq!(pool::bytes(), Entry::allocation_size_for(0));
+    assert_eq!(
+        pool::get_memory_usage().bytes,
+        Entry::allocation_size_for(0)
+    );
 }
 
 #[test]
@@ -280,23 +283,29 @@ fn serde() {
 #[test]
 #[serial]
 fn memory_bytes_follow_entries() {
-    let start = pool::bytes();
+    let start = pool::get_memory_usage().bytes;
     {
         let a = Interned::new(b"counted bytes");
-        let after_a = pool::bytes();
+        let after_a = pool::get_memory_usage().bytes;
         assert_eq!(after_a - start, Entry::allocation_size_for(a.len()));
 
         let repeat = Interned::new(b"counted bytes");
         let clone = a.clone();
-        assert_eq!(pool::bytes(), after_a);
+        assert_eq!(pool::get_memory_usage().bytes, after_a);
 
         let b = Interned::new(b"more counted bytes");
-        assert_eq!(pool::bytes() - after_a, Entry::allocation_size_for(b.len()));
+        assert_eq!(
+            pool::get_memory_usage().bytes - after_a,
+            Entry::allocation_size_for(b.len())
+        );
 
         drop((a, repeat, clone));
-        assert_eq!(pool::bytes() - start, Entry::allocation_size_for(b.len()));
+        assert_eq!(
+            pool::get_memory_usage().bytes - start,
+            Entry::allocation_size_for(b.len())
+        );
     }
-    assert_eq!(pool::bytes(), start);
+    assert_eq!(pool::get_memory_usage().bytes, start);
     verify_empty();
 }
 
@@ -310,10 +319,10 @@ fn shrink_to_fit_keeps_bytes() {
             .collect::<Vec<_>>();
         assert!(!kept.is_empty());
 
-        let (len, bytes) = (pool::len(), pool::bytes());
+        let (len, bytes) = (pool::len(), pool::get_memory_usage().bytes);
         pool::shrink_to_fit();
         assert_eq!(pool::len(), len);
-        assert_eq!(pool::bytes(), bytes);
+        assert_eq!(pool::get_memory_usage().bytes, bytes);
     }
     verify_empty();
 }
