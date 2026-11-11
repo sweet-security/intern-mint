@@ -60,8 +60,9 @@ impl ShardedSet {
                 |o| unsafe { o.hash() },
             )
             .or_insert_with(|| {
+                let entry = Entry::new(value, hash);
                 *bytes += Entry::allocation_size_for(value.len());
-                Entry::new(value, hash)
+                entry
             });
 
         // Safety: the shard is locked
