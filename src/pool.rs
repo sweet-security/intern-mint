@@ -16,13 +16,8 @@ type Shard = Mutex<LockedShard>;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct MemoryUsage {
-    /// Number of entries in the pool
     pub len: usize,
-    /// Number of entries the pool's tables can hold without reallocating
     pub capacity: usize,
-    /// Bytes allocated for the entries themselves, each a small header followed by the data,
-    /// as requested from the allocator
-    pub bytes: usize,
 }
 
 pub(crate) struct ShardedSet {
@@ -65,10 +60,8 @@ impl ShardedSet {
                 |o| unsafe { o.hash() },
             )
             .or_insert_with(|| {
-                let entry = Entry::new(value, hash);
-                // Safety: the entry was just allocated and isn't reachable by anyone else yet
-                *bytes += unsafe { entry.allocation_size() };
-                entry
+                *bytes += Entry::allocation_size_for(value.len());
+                Entry::new(value, hash)
             });
 
         // Safety: the shard is locked
@@ -126,6 +119,10 @@ impl ShardedSet {
         self.shards.iter().map(|o| o.lock().table.capacity()).sum()
     }
 
+    pub(crate) fn bytes(&self) -> usize {
+        self.shards.iter().map(|o| o.lock().bytes).sum()
+    }
+
     pub(crate) fn get_memory_usage(&self) -> MemoryUsage {
         self.shards
             .iter()
@@ -134,13 +131,11 @@ impl ShardedSet {
                 MemoryUsage {
                     len: o.table.len(),
                     capacity: o.table.capacity(),
-                    bytes: o.bytes,
                 }
             })
             .reduce(|acc, o| MemoryUsage {
                 len: acc.len + o.len,
                 capacity: acc.capacity + o.capacity,
-                bytes: acc.bytes + o.bytes,
             })
             .unwrap_or_default()
     }
@@ -186,6 +181,12 @@ pub fn len() -> usize {
 
 pub fn capacity() -> usize {
     POOL.capacity()
+}
+
+/// Bytes allocated for the entries themselves, each a small header followed by the data, as
+/// requested from the allocator
+pub fn bytes() -> usize {
+    POOL.bytes()
 }
 
 pub fn get_memory_usage() -> MemoryUsage {
