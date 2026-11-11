@@ -74,6 +74,16 @@ impl Entry {
         }
     }
 
+    /// The size of the entry's allocation, the header included
+    ///
+    /// # Safety
+    ///
+    /// The entry must be alive, see [Entry]
+    pub(crate) unsafe fn allocation_size(&self) -> usize {
+        // Safety: guaranteed by the caller
+        Self::layout(unsafe { self.header() }.len).size()
+    }
+
     /// # Safety
     ///
     /// The entry must be alive, see [Entry]
