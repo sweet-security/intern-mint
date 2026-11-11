@@ -5,13 +5,23 @@ use parking_lot::{Mutex, MutexGuard};
 
 use crate::entry::Entry;
 
-type LockedShard = HashTable<Entry>;
+#[derive(Default)]
+pub(crate) struct LockedShard {
+    table: HashTable<Entry>,
+    /// Sum of the allocation sizes of the entries in `table`
+    bytes: usize,
+}
+
 type Shard = Mutex<LockedShard>;
 
 #[derive(Debug, Default, Clone, Copy)]
+#[non_exhaustive]
 pub struct MemoryUsage {
     pub len: usize,
     pub capacity: usize,
+    /// Bytes allocated for the entries themselves, each a small header followed by the data, as
+    /// requested from the allocator
+    pub bytes: usize,
 }
 
 pub(crate) struct ShardedSet {
@@ -36,6 +46,7 @@ impl ShardedSet {
     pub(crate) fn get_from_existing_ref(&self, value: &[u8]) -> Option<Entry> {
         let (hash, shard) = self.get_hash_and_shard(value);
         shard
+            .table
             .find(hash, |o| std::ptr::eq(o.data_ptr(), value.as_ptr()))
             // Safety: the shard is locked
             .map(|o| unsafe { o.acquire() })
@@ -43,15 +54,20 @@ impl ShardedSet {
 
     pub(crate) fn get_or_insert(&self, value: &[u8]) -> Entry {
         let (hash, mut shard) = self.get_hash_and_shard(value);
+        let LockedShard { table, bytes } = &mut *shard;
 
         // Safety: entries are only accessed while the shard is locked
-        let entry = shard
+        let entry = table
             .entry(
                 hash,
                 |o| unsafe { o.data() } == value,
                 |o| unsafe { o.hash() },
             )
-            .or_insert_with(|| Entry::new(value, hash));
+            .or_insert_with(|| {
+                let entry = Entry::new(value, hash);
+                *bytes += Entry::allocation_size_for(value.len());
+                entry
+            });
 
         // Safety: the shard is locked
         unsafe { entry.get().acquire() }
@@ -74,8 +90,9 @@ impl ShardedSet {
 
         // `entry` may be dangling from here on, so it's only compared by address
         let mut shard = self.get_shard(hash);
+        let LockedShard { table, bytes } = &mut *shard;
 
-        let Ok(found) = shard.find_entry(hash, |o| *o == entry) else {
+        let Ok(found) = table.find_entry(hash, |o| *o == entry) else {
             // another thread already removed it
             return;
         };
@@ -87,6 +104,8 @@ impl ShardedSet {
         }
 
         let (removed, _) = found.remove();
+        // Safety: the shard is still locked, so the entry hasn't been freed
+        *bytes -= unsafe { removed.allocation_size() };
         // free outside of the lock
         drop(shard);
         // Safety: the entry was removed with no handles left, so nothing can reach it anymore
@@ -94,15 +113,15 @@ impl ShardedSet {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.shards.iter().all(|s| s.lock().is_empty())
+        self.shards.iter().all(|s| s.lock().table.is_empty())
     }
 
     pub(crate) fn len(&self) -> usize {
-        self.shards.iter().map(|o| o.lock().len()).sum()
+        self.shards.iter().map(|o| o.lock().table.len()).sum()
     }
 
     pub(crate) fn capacity(&self) -> usize {
-        self.shards.iter().map(|o| o.lock().capacity()).sum()
+        self.shards.iter().map(|o| o.lock().table.capacity()).sum()
     }
 
     pub(crate) fn get_memory_usage(&self) -> MemoryUsage {
@@ -111,13 +130,15 @@ impl ShardedSet {
             .map(|o| {
                 let o = o.lock();
                 MemoryUsage {
-                    len: o.len(),
-                    capacity: o.capacity(),
+                    len: o.table.len(),
+                    capacity: o.table.capacity(),
+                    bytes: o.bytes,
                 }
             })
             .reduce(|acc, o| MemoryUsage {
                 len: acc.len + o.len,
                 capacity: acc.capacity + o.capacity,
+                bytes: acc.bytes + o.bytes,
             })
             .unwrap_or_default()
     }
@@ -125,7 +146,7 @@ impl ShardedSet {
     pub(crate) fn shrink_to_fit(&self) {
         for shard in self.shards.iter() {
             // Safety: the shard is locked
-            shard.lock().shrink_to_fit(|o| unsafe { o.hash() });
+            shard.lock().table.shrink_to_fit(|o| unsafe { o.hash() });
         }
     }
 }

@@ -6,13 +6,17 @@ use std::{
 use parking_lot::Mutex;
 use serial_test::serial;
 
-use crate::{BorrowedInterned, Interned, pool};
+use crate::{BorrowedInterned, Interned, entry::Entry, pool};
 
 fn verify_empty() {
     // after default interned is used for the first time, it's kept forever in the pool
     // create a default instance in case it didn't exist before
     let _a = Interned::default();
     assert!(pool::len() == 1);
+    assert_eq!(
+        pool::get_memory_usage().bytes,
+        Entry::allocation_size_for(0)
+    );
 }
 
 #[test]
@@ -274,6 +278,53 @@ fn serde() {
     let serialized = serde_json::to_string(&a).expect("serialize");
     let b = serde_json::from_str::<Interned>(&serialized).expect("deserialize");
     assert_eq!(a.as_ptr(), b.as_ptr());
+}
+
+#[test]
+#[serial]
+fn memory_bytes_follow_entries() {
+    let start = pool::get_memory_usage().bytes;
+    {
+        let a = Interned::new(b"counted bytes");
+        let after_a = pool::get_memory_usage().bytes;
+        assert_eq!(after_a - start, Entry::allocation_size_for(a.len()));
+
+        let repeat = Interned::new(b"counted bytes");
+        let clone = a.clone();
+        assert_eq!(pool::get_memory_usage().bytes, after_a);
+
+        let b = Interned::new(b"more counted bytes");
+        assert_eq!(
+            pool::get_memory_usage().bytes - after_a,
+            Entry::allocation_size_for(b.len())
+        );
+
+        drop((a, repeat, clone));
+        assert_eq!(
+            pool::get_memory_usage().bytes - start,
+            Entry::allocation_size_for(b.len())
+        );
+    }
+    assert_eq!(pool::get_memory_usage().bytes, start);
+    verify_empty();
+}
+
+#[test]
+#[serial]
+fn shrink_to_fit_keeps_bytes() {
+    {
+        let kept = (0..1024)
+            .map(|i| Interned::new(format!("shrink {i}").as_bytes()))
+            .filter(|o| o.len() % 2 == 0)
+            .collect::<Vec<_>>();
+        assert!(!kept.is_empty());
+
+        let (len, bytes) = (pool::len(), pool::get_memory_usage().bytes);
+        pool::shrink_to_fit();
+        assert_eq!(pool::len(), len);
+        assert_eq!(pool::get_memory_usage().bytes, bytes);
+    }
+    verify_empty();
 }
 
 #[test]

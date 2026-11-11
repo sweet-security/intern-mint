@@ -74,6 +74,21 @@ impl Entry {
         }
     }
 
+    /// The size of the allocation of an entry holding `len` bytes, the header included
+    pub(crate) fn allocation_size_for(len: usize) -> usize {
+        Self::layout(len).size()
+    }
+
+    /// The size of the entry's allocation, the header included
+    ///
+    /// # Safety
+    ///
+    /// The entry must be alive, see [Entry]
+    pub(crate) unsafe fn allocation_size(&self) -> usize {
+        // Safety: guaranteed by the caller
+        Self::allocation_size_for(unsafe { self.header() }.len)
+    }
+
     /// # Safety
     ///
     /// The entry must be alive, see [Entry]
